@@ -37,6 +37,7 @@ interface DynamicFormProps {
   footageSlots: FootageSlot[];
   onSubmit: (data: Record<string, string>, files: Record<string, File>) => void;
   loading?: boolean;
+  submitLabel?: string;
 }
 
 export function DynamicForm({
@@ -44,6 +45,7 @@ export function DynamicForm({
   footageSlots,
   onSubmit,
   loading,
+  submitLabel,
 }: DynamicFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const defaults: Record<string, string> = {};
@@ -192,7 +194,7 @@ export function DynamicForm({
       )}
 
       <Button type="submit" disabled={loading} className="w-full" size="lg">
-        {loading ? t("form.submitting") : t("form.submitRenderJob")}
+        {loading ? t("form.submitting") : (submitLabel || t("form.submitRenderJob"))}
       </Button>
     </form>
   );

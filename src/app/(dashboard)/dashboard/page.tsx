@@ -10,7 +10,7 @@ export default async function DashboardPage() {
 
   const whereClause = isClient ? { createdById: session.user.id } : {};
 
-  const [totalJobs, completedJobs, pendingJobs, failedJobs] =
+  const [totalJobs, completedJobs, pendingJobs, failedJobs, awaitingApproval] =
     await Promise.all([
       prisma.renderJob.count({ where: whereClause }),
       prisma.renderJob.count({ where: { ...whereClause, status: "COMPLETED" } }),
@@ -18,6 +18,7 @@ export default async function DashboardPage() {
         where: { ...whereClause, status: { in: ["PENDING", "DOWNLOADING", "RENDERING", "UPLOADING"] } },
       }),
       prisma.renderJob.count({ where: { ...whereClause, status: "FAILED" } }),
+      prisma.renderJob.count({ where: { status: "AWAITING_APPROVAL" } }),
     ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
       completedJobs={completedJobs}
       pendingJobs={pendingJobs}
       failedJobs={failedJobs}
+      awaitingApproval={isClient ? undefined : awaitingApproval}
       recentJobs={recentJobs.map((job) => ({
         id: job.id,
         jobName: job.jobName,

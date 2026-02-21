@@ -25,12 +25,14 @@ enum VariableType {
 }
 
 enum JobStatus {
+  AWAITING_APPROVAL
   PENDING
   DOWNLOADING
   RENDERING
   UPLOADING
   COMPLETED
   FAILED
+  REJECTED
   MANUAL
 }
 
@@ -148,8 +150,9 @@ model RenderJob {
   agentId        String?
   outputMp4Url   String?
   outputAepUrl   String?
-  errorMessage   String?
-  retryCount     Int          @default(0)
+  errorMessage     String?
+  rejectionReason  String?
+  retryCount       Int          @default(0)
   maxRetries     Int          @default(3)
   jobName        String?
   createdAt      DateTime     @default(now())

@@ -16,6 +16,10 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  if (session.user.role === "CLIENT") {
+    redirect("/portal");
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar userRole={session.user.role as UserRole} />

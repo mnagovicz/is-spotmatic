@@ -68,11 +68,14 @@ export async function POST(req: NextRequest) {
 
   const { templateId, organizationId, jobName, priority, data } = parsed.data;
 
+  const status = session.user.role === "CLIENT" ? "AWAITING_APPROVAL" : "PENDING";
+
   const job = await prisma.renderJob.create({
     data: {
       templateId,
       organizationId,
       createdById: session.user.id,
+      status,
       jobName,
       priority,
       jobData: {

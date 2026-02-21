@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileVideo, CheckCircle, Clock, AlertTriangle } from "lucide-react";
+import { FileVideo, CheckCircle, Clock, AlertTriangle, Hourglass } from "lucide-react";
 import Link from "next/link";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { useTranslation } from "@/lib/i18n";
@@ -21,6 +21,7 @@ interface DashboardContentProps {
   completedJobs: number;
   pendingJobs: number;
   failedJobs: number;
+  awaitingApproval?: number;
   recentJobs: RecentJob[];
 }
 
@@ -29,12 +30,16 @@ export function DashboardContent({
   completedJobs,
   pendingJobs,
   failedJobs,
+  awaitingApproval,
   recentJobs,
 }: DashboardContentProps) {
   const { t } = useTranslation();
 
   const stats = [
     { labelKey: "dashboard.totalJobs", value: totalJobs, icon: FileVideo, color: "text-blue-600" },
+    ...(awaitingApproval !== undefined
+      ? [{ labelKey: "dashboard.awaitingApproval", value: awaitingApproval, icon: Hourglass, color: "text-orange-600" }]
+      : []),
     { labelKey: "dashboard.completed", value: completedJobs, icon: CheckCircle, color: "text-green-600" },
     { labelKey: "dashboard.inProgress", value: pendingJobs, icon: Clock, color: "text-yellow-600" },
     { labelKey: "dashboard.failed", value: failedJobs, icon: AlertTriangle, color: "text-red-600" },

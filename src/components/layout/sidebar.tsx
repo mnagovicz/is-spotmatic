@@ -10,6 +10,7 @@ import {
   Building2,
   Server,
   Plus,
+  ClipboardCheck,
 } from "lucide-react";
 import { UserRole } from "@/generated/prisma/client";
 import { useTranslation } from "@/lib/i18n";
@@ -19,9 +20,10 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { key: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "OPERATOR", "CLIENT"] },
-  { key: "nav.jobs", href: "/jobs", icon: FileVideo, roles: ["ADMIN", "OPERATOR", "CLIENT"] },
-  { key: "nav.newJob", href: "/jobs/new", icon: Plus, roles: ["ADMIN", "CLIENT"] },
+  { key: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "OPERATOR"] },
+  { key: "nav.approvals", href: "/approvals", icon: ClipboardCheck, roles: ["ADMIN", "OPERATOR"] },
+  { key: "nav.jobs", href: "/jobs", icon: FileVideo, roles: ["ADMIN", "OPERATOR"] },
+  { key: "nav.newJob", href: "/jobs/new", icon: Plus, roles: ["ADMIN"] },
   { key: "nav.templates", href: "/templates", icon: Layers, roles: ["ADMIN", "OPERATOR"] },
   { key: "nav.organizations", href: "/organizations", icon: Building2, roles: ["ADMIN"] },
   { key: "nav.agents", href: "/agents", icon: Server, roles: ["ADMIN"] },
