@@ -149,10 +149,11 @@ export default function TemplateEditorPage() {
         throw new Error("Analysis failed");
       }
 
-      const result: AnalysisResult = await res.json();
-      setAnalysis(result);
+      const result = await res.json();
+      const analysisData: AnalysisResult = result.analysis ?? result;
+      setAnalysis(analysisData);
       toast.success(
-        `Found ${result.controllers.length} controllers, ${result.footageItems.length} footage items`
+        `Found ${analysisData.controllers.length} controllers, ${analysisData.footageItems.length} footage items`
       );
     } catch {
       toast.error(t("toast.analysisFailed"));
@@ -334,6 +335,9 @@ export default function TemplateEditorPage() {
                 <TabsTrigger value="compositions">
                   {t("templates.editor.compositions")} ({analysis.compositions.length})
                 </TabsTrigger>
+                <TabsTrigger value="fonts">
+                  {t("templates.editor.fonts")} ({analysis.fonts.length})
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="controllers" className="space-y-4">
@@ -427,6 +431,22 @@ export default function TemplateEditorPage() {
                     {comp.name}
                   </div>
                 ))}
+              </TabsContent>
+
+              <TabsContent value="fonts" className="space-y-2">
+                {analysis.fonts.map((font) => (
+                  <div
+                    key={font}
+                    className="rounded-md border p-3 text-sm"
+                  >
+                    {font}
+                  </div>
+                ))}
+                {analysis.fonts.length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground">
+                    {t("templates.editor.noFonts")}
+                  </p>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>

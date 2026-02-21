@@ -131,6 +131,8 @@
   "templates.editor.noFootageSlots": "No footage slots configured.",
   "templates.editor.footageItemName": "Footage Item Name",
   "templates.editor.folderPath": "Folder Path",
+  "templates.editor.fonts": "Fonts",
+  "templates.editor.noFonts": "No fonts found.",
 
   "orgs.title": "Organizations",
   "orgs.newOrg": "New Organization",

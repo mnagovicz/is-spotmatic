@@ -131,6 +131,8 @@
   "templates.editor.noFootageSlots": "Zadne footage sloty nakonfigurovany.",
   "templates.editor.footageItemName": "Nazev footage polozky",
   "templates.editor.folderPath": "Cesta ke slozce",
+  "templates.editor.fonts": "Fonty",
+  "templates.editor.noFonts": "Zadne fonty nalezeny.",
 
   "orgs.title": "Organizace",
   "orgs.newOrg": "Nova organizace",
