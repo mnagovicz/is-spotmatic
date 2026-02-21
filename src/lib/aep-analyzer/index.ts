@@ -58,6 +58,7 @@ const KNOWN_EFFECT_NAMES = [
   "Curves",
   "Hue/Saturation",
   "CC Composite",
+  "Compositing Options",
 ];
 
 // Common footage file extensions
@@ -81,6 +82,180 @@ const FOOTAGE_EXTENSIONS = [
   ".eps",
   ".pdf",
 ];
+
+// ─── Internal AE Identifier Blacklist ───────────────────
+// These are AE internal binary markers, chunk IDs, and effect type identifiers
+// that should NEVER appear as user-visible names for controllers, effects, etc.
+
+const INTERNAL_AE_PREFIXES = ["ADBE "];
+
+const INTERNAL_AE_EXACT = new Set([
+  "Utf8",
+  "tdgp",
+  "tdsn",
+  "tdsb",
+  "tdbs",
+  "sspc",
+  "CdHd",
+  "cdta",
+  "LIST",
+  "RIFX",
+  "RIFF",
+  "CompH",
+  "Layr",
+  "LCmd",
+  "fnam",
+  "tdbf",
+  "ldta",
+  "idta",
+  "lhd3",
+  "ldat",
+  "opti",
+  "btdk",
+  "NmHd",
+  "CLst",
+  "GCst",
+  "GCky",
+  "Fold",
+  "Item",
+  "StVS",
+  "PPST",
+  "ADBF",
+  "ppSn",
+  "pSiz",
+  "alas",
+  "foac",
+  "tdum",
+  "tdb4",
+  "tdmn",
+  "sfdt",
+  "tdps",
+  "ewin",
+  "CPTm",
+  "tdpi",
+  "pgui",
+  "pard",
+  "parT",
+  "Tparn",
+  "tpar",
+  "NmHd",
+  "cdat",
+  "cdat ",
+]);
+
+// Known binary suffixes that get appended to real strings in ASCII extraction.
+// E.g., "controler domaciLIST" — the "LIST" is a RIFX chunk marker.
+const BINARY_SUFFIXES = [
+  "LIST",
+  "Utf8",
+  "tdum",
+  "tdb4",
+  "tdmn",
+  "sfdt",
+  "CPTm",
+  "ldta",
+  "sspc",
+  "foac",
+  "tdpi",
+  "pgui",
+  "tdsb",
+  "tdsn",
+  "tdgp",
+  "tdps",
+  "fnam",
+  "ewin",
+  "cdat",
+];
+
+// Known binary prefixes that get prepended to real strings.
+const BINARY_PREFIXES = [
+  "sspc",
+  "fnam",
+  "tdgp",
+  "tdsn",
+  "tpar",
+  "Tparn",
+];
+
+/**
+ * Clean a string by stripping known binary suffixes/prefixes that get
+ * concatenated during ASCII extraction from binary data.
+ */
+function cleanBinaryArtifacts(s: string): string {
+  let cleaned = s;
+  // Strip known binary suffixes
+  for (const suffix of BINARY_SUFFIXES) {
+    if (cleaned.endsWith(suffix) && cleaned.length > suffix.length) {
+      cleaned = cleaned.slice(0, -suffix.length);
+    }
+  }
+  // Strip known binary prefixes
+  for (const prefix of BINARY_PREFIXES) {
+    if (cleaned.startsWith(prefix) && cleaned.length > prefix.length) {
+      cleaned = cleaned.slice(prefix.length);
+    }
+  }
+  return cleaned.trim();
+}
+
+/**
+ * Check if a string is an internal AE identifier that should not be shown
+ * as a user-visible name.
+ */
+function isInternalString(s: string): boolean {
+  const trimmed = s.trim();
+  // Too short to be a meaningful name
+  if (trimmed.length < 3) return true;
+  // Exact match against known internal identifiers
+  if (INTERNAL_AE_EXACT.has(trimmed)) return true;
+  // Starts with known internal prefix
+  if (INTERNAL_AE_PREFIXES.some((p) => trimmed.startsWith(p))) return true;
+  // Starts with "(" followed by internal prefix (e.g., "(ADBE")
+  if (trimmed.startsWith("(") && INTERNAL_AE_PREFIXES.some((p) => trimmed.slice(1).startsWith(p))) return true;
+  // Concatenation of internal markers (e.g., "sspcfnam", "8sspcfnam", "jsspcfnam")
+  if (/^.{0,2}sspc/.test(trimmed) || /^.{0,2}fnam/.test(trimmed)) return true;
+  // Strings that are concatenations of binary markers (e.g., "tparTparn", "parTparn")
+  if (/^(par[dT]|tpar|Tparn)+/.test(trimmed) && trimmed.length < 15) return true;
+  // Path-like garbage from binary: e.g., "-_0_/-tdmn"
+  if (/^[-_0-9./]+$/.test(trimmed.replace(/[a-z]{3,4}$/, ""))) return true;
+  // All-uppercase 4-char codes are likely chunk IDs
+  if (trimmed.length === 4 && /^[A-Z][A-Za-z]{3}$/.test(trimmed)) return true;
+  // Short strings that look like binary data (non-word chars, single chars repeated)
+  if (trimmed.length <= 5 && !/^[a-zA-Z0-9_\- ]+$/.test(trimmed)) return true;
+  return false;
+}
+
+/**
+ * Check if a string looks like an AE expression (JavaScript code).
+ */
+function isExpression(s: string): boolean {
+  return (
+    s.includes("thisComp.layer") ||
+    s.includes("effect(") ||
+    s.includes("endVal") ||
+    s.includes("toFixed(") ||
+    s.includes("toString()") ||
+    s.includes("linear(") ||
+    s.includes("comp(") ||
+    s.includes("== 0 ? 1 : value")
+  );
+}
+
+/**
+ * Check if a string looks like a valid filename (not binary garbage).
+ */
+function isValidFilename(name: string): boolean {
+  if (name.length < 2 || name.length > 200) return false;
+  // Must contain at least one letter
+  if (!/[a-zA-Z]/.test(name)) return false;
+  // Must not contain control characters or non-printable chars
+  if (/[\x00-\x1f\x7f]/.test(name)) return false;
+  // Must not start with internal AE identifiers
+  if (isInternalString(name)) return false;
+  // Must not contain too many consecutive non-alphanumeric chars (garbage sign)
+  if (/[^a-zA-Z0-9\s._\-()]{4,}/.test(name)) return false;
+  return true;
+}
 
 // ─── String Extraction Helpers ──────────────────────────
 
@@ -177,23 +352,32 @@ function extractNearbyString(
   buffer: Buffer,
   position: number,
   direction: "before" | "after",
-  maxDistance = 512
+  maxDistance = 512,
+  excludeInternal = true
 ): string | null {
   if (direction === "before") {
     const start = Math.max(0, position - maxDistance);
     const slice = buffer.subarray(start, position);
-    // Find the last readable string in this slice
-    const strings = extractAsciiStrings(slice, 3);
-    if (strings.length > 0) return strings[strings.length - 1];
+    // Prefer UTF-16LE strings (real layer/effect names are UTF-16LE)
     const utf16 = extractUtf16Strings(slice, 3);
-    if (utf16.length > 0) return utf16[utf16.length - 1];
+    const asciiStrs = extractAsciiStrings(slice, 3);
+    // Search from the end (closest to position) for a valid string
+    const candidates = [
+      ...utf16.reverse().map((s) => s),
+      ...asciiStrs.reverse().map((s) => s),
+    ];
+    for (const s of candidates) {
+      if (!excludeInternal || !isInternalString(s)) return s;
+    }
   } else {
     const end = Math.min(buffer.length, position + maxDistance);
     const slice = buffer.subarray(position, end);
-    const strings = extractAsciiStrings(slice, 3);
-    if (strings.length > 0) return strings[0];
     const utf16 = extractUtf16Strings(slice, 3);
-    if (utf16.length > 0) return utf16[0];
+    const asciiStrs = extractAsciiStrings(slice, 3);
+    const candidates = [...utf16, ...asciiStrs];
+    for (const s of candidates) {
+      if (!excludeInternal || !isInternalString(s)) return s;
+    }
   }
   return null;
 }
@@ -222,9 +406,16 @@ function findCompositions(
       // Scan nearby for UTF-16 strings (comp names are often UTF-16 in AEP)
       const end = Math.min(buffer.length, pos + 1024);
       const slice = buffer.subarray(pos, end);
-      const utf16Names = extractUtf16Strings(slice, 2);
-      for (const name of utf16Names) {
-        if (!seen.has(name) && isLikelyCompName(name)) {
+      const utf16Names = extractUtf16Strings(slice, 3);
+      for (const rawName of utf16Names) {
+        const name = cleanBinaryArtifacts(rawName);
+        if (
+          name.length >= 3 &&
+          !seen.has(name) &&
+          isLikelyCompName(name) &&
+          !isInternalString(name) &&
+          !isExpression(name)
+        ) {
           seen.add(name);
           comps.push({ name });
         }
@@ -234,11 +425,18 @@ function findCompositions(
 
   // Strategy 2: Look for strings that match common AE composition naming patterns.
   // E.g., prefixed with underscores, contain "export", "Slide", "Ovladani", etc.
-  for (const s of allStrings) {
+  for (const rawS of allStrings) {
+    const s = cleanBinaryArtifacts(rawS);
     if (seen.has(s)) continue;
-    if (isLikelyCompName(s) && !isFilePath(s) && !isEffectName(s)) {
-      // Validate: comp names typically start with letters/underscores
-      if (/^[_a-zA-Z]/.test(s) && s.length >= 3 && s.length <= 200) {
+    if (
+      isLikelyCompName(s) &&
+      !isFilePath(s) &&
+      !isEffectName(s) &&
+      !isInternalString(s) &&
+      !isExpression(s)
+    ) {
+      // Validate: comp names typically start with letters/underscores, contain mostly word chars
+      if (/^[_a-zA-Z]/.test(s) && s.length >= 3 && s.length <= 200 && /^[_a-zA-Z0-9\s\-.()]+$/.test(s)) {
         seen.add(s);
         comps.push({ name: s });
       }
@@ -249,15 +447,14 @@ function findCompositions(
 }
 
 function isLikelyCompName(s: string): boolean {
-  // Comp names in AE projects often have these patterns
+  // Comp names in AE projects often have these patterns.
+  // Removed overly broad patterns like /comp/i and /main/i to reduce false positives.
   const compPatterns = [
-    /^_{1,3}/, // starts with underscores like ___Fotbal_Chance_export
+    /^_{2,3}[A-Za-z]/, // starts with 2-3 underscores + letter like ___Fotbal_Chance_export
     /export/i,
-    /slide/i,
-    /comp/i,
+    /\bslide[_\s]/i, // "Slide_1", "SLIDE 1" but NOT "Slider"
     /ovladani/i,
     /chance/i,
-    /main/i,
     /^pre-?comp/i,
     /render/i,
   ];
@@ -291,14 +488,23 @@ function findControllers(
 ): AepController[] {
   const controllerPattern = /control/i;
   const controllerNames = unique(
-    allStrings.filter(
-      (s) =>
-        controllerPattern.test(s) &&
-        !isEffectName(s) &&
-        !s.includes("()") &&
-        s.length < 150 &&
-        s.length >= 5
-    )
+    allStrings
+      .map(cleanBinaryArtifacts)
+      .filter(
+        (s) =>
+          controllerPattern.test(s) &&
+          !isEffectName(s) &&
+          !isInternalString(s) &&
+          !isExpression(s) &&
+          !s.startsWith("ADBE") &&
+          // Exclude effect type names like "Slider Control", "Checkbox Control"
+          !EFFECT_PATTERNS.some((ep) => s.includes(ep.pattern)) &&
+          !s.includes("()") &&
+          !s.includes("(\"") &&
+          !s.includes("= ") &&
+          s.length < 150 &&
+          s.length >= 5
+      )
   );
 
   const controllers: AepController[] = [];
@@ -360,20 +566,30 @@ function findEffectsForController(
         for (const effectPos of effectPositions) {
           // The effect instance name often precedes the effect type in the binary.
           // It could be something like "kurz" for a Slider Control.
+          // Use excludeInternal=true to skip ADBE/Utf8/etc. identifiers
           const nearbyBefore = extractNearbyString(
             region,
             effectPos,
             "before",
-            256
+            256,
+            true // excludeInternal
           );
 
-          const effectName =
-            nearbyBefore &&
-            nearbyBefore !== layerName &&
-            nearbyBefore !== ep.pattern &&
-            nearbyBefore.length < 100
-              ? nearbyBefore
-              : ep.pattern;
+          // Clean and validate the found name
+          const cleanedName = nearbyBefore ? cleanBinaryArtifacts(nearbyBefore) : null;
+          const isValidName =
+            cleanedName &&
+            cleanedName.length >= 3 &&
+            cleanedName !== layerName &&
+            cleanedName !== ep.pattern &&
+            !isInternalString(cleanedName) &&
+            !isEffectName(cleanedName) &&
+            !EFFECT_PATTERNS.some((p) => cleanedName.includes(p.pattern)) &&
+            // Filter truncated effect type names like "heckbox Control"
+            !EFFECT_PATTERNS.some((p) => p.pattern.includes(cleanedName)) &&
+            cleanedName.length < 100;
+
+          const effectName = isValidName ? cleanedName : ep.pattern;
 
           const key = `${effectName}:${ep.type}`;
           if (!seen.has(key)) {
@@ -453,6 +669,9 @@ function findFootageItems(allStrings: string[]): AepFootageItem[] {
         folderPath = "";
       }
 
+      // Validate filename is not binary garbage
+      if (!isValidFilename(name)) continue;
+
       // Deduplicate by full path
       const key = `${folderPath}/${name}`;
       if (!seen.has(key) && name.length > 1) {
@@ -474,11 +693,18 @@ function findFootageItems(allStrings: string[]): AepFootageItem[] {
       const normalized = s.replace(/\\/g, "/").replace(/\/$/, "");
       if (
         normalized.length < 200 &&
+        normalized.length >= 5 &&
         /^[a-zA-Z0-9_\-\s./]+$/.test(normalized)
       ) {
         // Check if this path contains footage-like folder names
-        const parts = normalized.split("/");
-        if (parts.length >= 2 && parts.every((p) => p.length < 80)) {
+        const parts = normalized.split("/").filter(Boolean);
+        // Each folder segment must be at least 2 chars and contain letters
+        if (
+          parts.length >= 2 &&
+          parts.every((p) => p.length >= 2 && p.length < 80 && /[a-zA-Z]/.test(p)) &&
+          // No segment should be an internal AE identifier
+          !parts.some((p) => isInternalString(p))
+        ) {
           // Store as a folder reference (no filename)
           const key = `${normalized}/`;
           if (!seen.has(key)) {
@@ -505,27 +731,102 @@ function findFootageItems(allStrings: string[]): AepFootageItem[] {
 
 // Common font family names that appear in AEP files.
 // AEP stores font references with their PostScript or family names.
-const KNOWN_FONT_PATTERNS = [
-  /Stag\s*Sans/i,
-  /Arial/i,
-  /Helvetica/i,
-  /Roboto/i,
-  /Open\s*Sans/i,
-  /Montserrat/i,
-  /Lato/i,
-  /Futura/i,
-  /Gotham/i,
-  /Proxima\s*Nova/i,
-  /Source\s*Sans/i,
-  /Noto\s*Sans/i,
-  /Inter/i,
-  /Poppins/i,
-  /Raleway/i,
-  /Barlow/i,
-  /Oswald/i,
-  /Bebas/i,
-  /DIN/i,
+const KNOWN_FONT_PATTERNS: { pattern: RegExp; displayName: string }[] = [
+  { pattern: /Stag\s*Sans/i, displayName: "Stag Sans" },
+  { pattern: /Arial/i, displayName: "Arial" },
+  { pattern: /Helvetica/i, displayName: "Helvetica" },
+  { pattern: /Roboto/i, displayName: "Roboto" },
+  { pattern: /Open\s*Sans/i, displayName: "Open Sans" },
+  { pattern: /Montserrat/i, displayName: "Montserrat" },
+  { pattern: /Lato/i, displayName: "Lato" },
+  { pattern: /Futura/i, displayName: "Futura" },
+  { pattern: /Gotham/i, displayName: "Gotham" },
+  { pattern: /Proxima\s*Nova/i, displayName: "Proxima Nova" },
+  { pattern: /Source\s*Sans/i, displayName: "Source Sans" },
+  { pattern: /Noto\s*Sans/i, displayName: "Noto Sans" },
+  { pattern: /Inter/i, displayName: "Inter" },
+  { pattern: /Poppins/i, displayName: "Poppins" },
+  { pattern: /Raleway/i, displayName: "Raleway" },
+  { pattern: /Barlow/i, displayName: "Barlow" },
+  { pattern: /Oswald/i, displayName: "Oswald" },
+  { pattern: /Bebas/i, displayName: "Bebas" },
+  { pattern: /DIN/i, displayName: "DIN" },
 ];
+
+// Strings that appear near font markers but are NOT font names.
+// Includes AE property names, ICC color profile terms, and content words.
+const NON_FONT_STRINGS = new Set([
+  // AE effect/property names
+  "Slider Control",
+  "Checkbox Control",
+  "Color Control",
+  "Point Control",
+  "Layer Control",
+  "Angle Control",
+  "Dropdown Menu Control",
+  "Compositing Options",
+  "Compositing Option",
+  "Take Matte From Layer",
+  "Fill Mask",
+  "Fill",
+  "Blur Radius",
+  "Blur Dimensions",
+  "Fast Box Blur",
+  "Gaussian Blur",
+  "Drop Shadow",
+  "Set Matte",
+  "Invert Matte",
+  "Stroke",
+  "Glow",
+  "Tint",
+  "Levels",
+  "Curves",
+  "Color",
+  "Slider",
+  "Checkbox",
+  "If Layer Sizes Differ",
+  // ICC color profile / color management terms
+  "Hewlett",
+  "Packard",
+  "Farge",
+  "Kleuren",
+  "Farb",
+  // ICC color profile strings
+  "LCDFarge",
+  "LCDLCD",
+  // Content words that appear in AEP data but are not fonts
+  "Pardubice",
+  "Liberec",
+  "Slavia",
+  "Slavie",
+]);
+
+/**
+ * Check if a string is a plausible font name found near font markers.
+ * Font names follow strict naming conventions: properly capitalized words
+ * (e.g., "Stag Sans", "Myriad Pro") or CamelCase (e.g., "StagSans").
+ */
+function isLikelyFontName(s: string): boolean {
+  const cleaned = cleanBinaryArtifacts(s).trim();
+  if (cleaned.length < 4 || cleaned.length > 60) return false;
+  if (isInternalString(cleaned)) return false;
+  if (NON_FONT_STRINGS.has(cleaned)) return false;
+  // Must start with uppercase
+  if (!/^[A-Z]/.test(cleaned)) return false;
+  // Must match one of these font-like patterns:
+  // Must match one of these font-like patterns:
+  const isProperWords = /^[A-Z][a-z]{2,}(\s[A-Z][a-z]{2,})*$/.test(cleaned); // "Myriad Pro", "Stag Sans"
+  const isCamelCase = /^[A-Z][a-z]+([A-Z][a-z]+)+$/.test(cleaned); // "StagSans", "OpenSans"
+  const isSingleWord = /^[A-Z][a-z]{3,}$/.test(cleaned); // "Myriad", "Inter", "Roboto"
+  if (!isProperWords && !isCamelCase && !isSingleWord) return false;
+  // Real font names contain vowels (filters garbage like "Ewstfvdv")
+  if (!/[aeiouAEIOU]/.test(cleaned.slice(1))) return false;
+  // Must not contain known binary marker substrings
+  for (const marker of Array.from(INTERNAL_AE_EXACT)) {
+    if (cleaned.includes(marker) && cleaned !== marker) return false;
+  }
+  return true;
+}
 
 /**
  * Find fonts used in the AEP file.
@@ -537,17 +838,16 @@ function findFonts(allStrings: string[], buffer: Buffer): string[] {
   const seen = new Set<string>();
 
   // Strategy 1: Match against known font patterns in all extracted strings
-  for (const s of allStrings) {
-    for (const pattern of KNOWN_FONT_PATTERNS) {
+  for (const rawS of allStrings) {
+    const s = cleanBinaryArtifacts(rawS);
+    for (const { pattern, displayName } of KNOWN_FONT_PATTERNS) {
       if (pattern.test(s)) {
-        // Clean up the font name
-        const match = s.match(pattern);
-        if (match) {
-          const fontName = match[0].replace(/\s+/g, " ").trim();
-          if (!seen.has(fontName.toLowerCase())) {
-            seen.add(fontName.toLowerCase());
-            fonts.push(fontName);
-          }
+        const lower = displayName.toLowerCase();
+        if (!seen.has(lower) && !NON_FONT_STRINGS.has(displayName)) {
+          seen.add(lower);
+          // Also register no-space variant for dedup with Strategy 3
+          seen.add(lower.replace(/\s+/g, ""));
+          fonts.push(displayName);
         }
       }
     }
@@ -564,15 +864,9 @@ function findFonts(allStrings: string[], buffer: Buffer): string[] {
       const utf16Names = extractUtf16Strings(slice, 3);
       const asciiNames = extractAsciiStrings(slice, 3);
 
-      for (const name of [...utf16Names, ...asciiNames]) {
-        // Font names typically are capitalized words without special characters
-        if (
-          /^[A-Z][a-zA-Z\s-]+$/.test(name) &&
-          name.length >= 3 &&
-          name.length <= 60 &&
-          !isEffectName(name) &&
-          !name.includes("/")
-        ) {
+      for (const rawName of [...utf16Names, ...asciiNames]) {
+        const name = cleanBinaryArtifacts(rawName);
+        if (isLikelyFontName(name)) {
           const lower = name.toLowerCase().trim();
           if (!seen.has(lower)) {
             seen.add(lower);
@@ -584,17 +878,29 @@ function findFonts(allStrings: string[], buffer: Buffer): string[] {
   }
 
   // Strategy 3: Look for PostScript-style font names (e.g., "StagSans-Book")
-  const postScriptPattern = /[A-Z][a-zA-Z]+-[A-Za-z]+/;
-  for (const s of allStrings) {
+  const postScriptPattern = /[A-Z][a-zA-Z]{2,}[-][A-Za-z]{3,}/;
+  for (const rawS of allStrings) {
+    const s = cleanBinaryArtifacts(rawS);
     const match = s.match(postScriptPattern);
     if (match) {
       const fontName = match[0];
+      // Validate it's not binary garbage or a non-font string
+      if (isInternalString(fontName)) continue;
       // Convert PostScript name to readable: "StagSans-Book" -> "Stag Sans"
       const familyName = fontName
         .split("-")[0]
         .replace(/([a-z])([A-Z])/g, "$1 $2");
       const lower = familyName.toLowerCase();
-      if (!seen.has(lower) && familyName.length >= 3 && familyName.length < 60) {
+      if (
+        !seen.has(lower) &&
+        familyName.length >= 3 &&
+        familyName.length < 60 &&
+        !NON_FONT_STRINGS.has(familyName) &&
+        // Must contain a vowel (not random binary garbage)
+        /[aeiouAEIOU]/.test(familyName.slice(1)) &&
+        // No 3+ consecutive uppercase (rejects ICC/LCD profile artifacts)
+        !/[A-Z]{3,}/.test(familyName)
+      ) {
         seen.add(lower);
         fonts.push(familyName);
       }
