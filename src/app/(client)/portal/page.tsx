@@ -22,9 +22,12 @@ export default async function PortalPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recentOrders: any[] = await prisma.renderJob.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: { dueDate: { sort: "asc", nulls: "last" } },
     take: 10,
-    include: { template: true },
+    include: {
+      template: true,
+      deliveryDestination: { select: { id: true, name: true } },
+    },
   });
 
   return (
@@ -41,7 +44,10 @@ export default async function PortalPage() {
         jobName: order.jobName,
         status: order.status,
         createdAt: order.createdAt.toISOString(),
-        templateName: order.template.name,
+        dueDate: order.dueDate?.toISOString() || null,
+        broadcastDate: order.broadcastDate?.toISOString() || null,
+        deliveryDestinationName: order.deliveryDestination?.name || null,
+        templateName: order.template?.name || "—",
       }))}
     />
   );

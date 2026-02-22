@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
 interface RecentOrder {
@@ -37,6 +37,9 @@ interface RecentOrder {
   jobName: string | null;
   status: JobStatus;
   createdAt: string;
+  dueDate: string | null;
+  broadcastDate: string | null;
+  deliveryDestinationName: string | null;
   templateName: string;
 }
 
@@ -73,7 +76,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   if (!job) return (
     <TableRow>
-      <TableCell colSpan={5} className="bg-muted/30 py-3 px-8">
+      <TableCell colSpan={8} className="bg-muted/30 py-3 px-8">
         {t("common.loading")}
       </TableCell>
     </TableRow>
@@ -94,7 +97,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={5} className="bg-muted/30 p-0">
+      <TableCell colSpan={8} className="bg-muted/30 p-0">
         <div className="space-y-1 px-8 py-3">
           {Object.entries(rows)
             .sort(([a], [b]) => Number(a) - Number(b))
@@ -148,6 +151,9 @@ function RecentOrdersTable({ recentOrders }: { recentOrders: RecentOrder[] }) {
               <TableRow>
                 <TableHead>{t("portal.orders.order")}</TableHead>
                 <TableHead>{t("portal.orders.template")}</TableHead>
+                <TableHead>{t("portal.orders.broadcastDate")}</TableHead>
+                <TableHead>{t("portal.orders.deliveryDestination")}</TableHead>
+                <TableHead>{t("portal.orders.dueDate")}</TableHead>
                 <TableHead>{t("portal.orders.status")}</TableHead>
                 <TableHead>{t("portal.orders.created")}</TableHead>
                 <TableHead></TableHead>
@@ -176,6 +182,15 @@ function RecentOrdersTable({ recentOrders }: { recentOrders: RecentOrder[] }) {
                       </div>
                     </TableCell>
                     <TableCell>{order.templateName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {order.broadcastDate ? format(new Date(order.broadcastDate), "d.M.yyyy HH:mm") : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {order.deliveryDestinationName || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {order.dueDate ? format(new Date(order.dueDate), "d.M.yyyy HH:mm") : "—"}
+                    </TableCell>
                     <TableCell>
                       <JobStatusBadge status={order.status} />
                     </TableCell>

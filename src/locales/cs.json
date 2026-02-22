@@ -256,6 +256,9 @@
   "portal.orders.order": "Objednavka",
   "portal.orders.template": "Sablona",
   "portal.orders.status": "Stav",
+  "portal.orders.broadcastDate": "Termin vysilani",
+  "portal.orders.deliveryDestination": "Misto doruceni",
+  "portal.orders.dueDate": "Termin vyroby",
   "portal.orders.created": "Vytvoreno",
 
   "portal.orders.detail.title": "Detail objednavky",

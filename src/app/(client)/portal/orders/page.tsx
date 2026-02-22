@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 import { JobStatus } from "@/generated/prisma/client";
 import { ChevronDown, Pencil, Trash2 } from "lucide-react";
@@ -48,7 +48,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   if (!job) return (
     <TableRow>
-      <TableCell colSpan={5} className="bg-muted/30 py-3 px-8">
+      <TableCell colSpan={8} className="bg-muted/30 py-3 px-8">
         {t("common.loading")}
       </TableCell>
     </TableRow>
@@ -71,7 +71,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={5} className="bg-muted/30 p-0">
+      <TableCell colSpan={8} className="bg-muted/30 p-0">
         <div className="space-y-1 px-8 py-3">
           {Object.entries(rows)
             .sort(([a], [b]) => Number(a) - Number(b))
@@ -149,19 +149,30 @@ export default function PortalOrdersPage() {
               <TableRow>
                 <TableHead>{t("portal.orders.order")}</TableHead>
                 <TableHead>{t("portal.orders.template")}</TableHead>
+                <TableHead>{t("portal.orders.broadcastDate")}</TableHead>
+                <TableHead>{t("portal.orders.deliveryDestination")}</TableHead>
+                <TableHead>{t("portal.orders.dueDate")}</TableHead>
                 <TableHead>{t("portal.orders.status")}</TableHead>
                 <TableHead>{t("portal.orders.created")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data?.jobs?.map(
+              {data?.jobs?.slice().sort((a: { dueDate: string | null }, b: { dueDate: string | null }) => {
+                if (!a.dueDate && !b.dueDate) return 0;
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+              }).map(
                 (job: {
                   id: string;
                   jobName: string | null;
                   status: JobStatus;
                   createdAt: string;
+                  dueDate: string | null;
+                  broadcastDate: string | null;
                   template: { name: string } | null;
+                  deliveryDestination: { name: string } | null;
                 }) => (
                   <>
                     <TableRow
@@ -184,6 +195,15 @@ export default function PortalOrdersPage() {
                         </div>
                       </TableCell>
                       <TableCell>{job.template?.name ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {job.broadcastDate ? format(new Date(job.broadcastDate), "d.M.yyyy HH:mm") : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {job.deliveryDestination?.name || "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {job.dueDate ? format(new Date(job.dueDate), "d.M.yyyy HH:mm") : "—"}
+                      </TableCell>
                       <TableCell>
                         <JobStatusBadge status={job.status} />
                       </TableCell>
@@ -221,7 +241,7 @@ export default function PortalOrdersPage() {
               {(!data?.jobs || data.jobs.length === 0) && (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={8}
                     className="text-center text-muted-foreground"
                   >
                     {t("portal.orders.noOrders")}

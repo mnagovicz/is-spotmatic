@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
         template: true,
         createdBy: { select: { id: true, name: true, email: true } },
         agent: { select: { id: true, name: true } },
+        deliveryDestination: { select: { id: true, name: true, type: true } },
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,

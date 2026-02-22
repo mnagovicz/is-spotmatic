@@ -17,34 +17,44 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const session = await auth();
+    if (!session?.user || session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const destinations = await prisma.deliveryDestination.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { templates: true } } },
+    });
+
+    return NextResponse.json(destinations);
+  } catch (error) {
+    console.error("GET /api/deliveries error:", error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-
-  const destinations = await prisma.deliveryDestination.findMany({
-    orderBy: { name: "asc" },
-    include: { _count: { select: { templates: true } } },
-  });
-
-  return NextResponse.json(destinations);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const session = await auth();
+    if (!session?.user || session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+
+    const destination = await prisma.deliveryDestination.create({
+      data: parsed.data,
+    });
+
+    return NextResponse.json(destination, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/deliveries error:", error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
-
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const destination = await prisma.deliveryDestination.create({
-    data: parsed.data,
-  });
-
-  return NextResponse.json(destination, { status: 201 });
 }

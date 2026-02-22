@@ -256,6 +256,9 @@
   "portal.orders.order": "Order",
   "portal.orders.template": "Template",
   "portal.orders.status": "Status",
+  "portal.orders.broadcastDate": "Broadcast date",
+  "portal.orders.deliveryDestination": "Delivery destination",
+  "portal.orders.dueDate": "Production deadline",
   "portal.orders.created": "Created",
 
   "portal.orders.detail.title": "Order Detail",
