@@ -9,6 +9,7 @@ const updateSchema = z.object({
   exportCompName: z.string().optional(),
   controlCompName: z.string().optional(),
   isActive: z.boolean().optional(),
+  color: z.string().nullable().optional(),
   aepFileUrl: z.string().optional(),
   aepFileName: z.string().optional(),
   aepFileSize: z.number().optional(),

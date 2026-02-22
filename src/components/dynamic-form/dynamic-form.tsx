@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useTranslation } from "@/lib/i18n";
@@ -15,12 +15,16 @@ interface TemplateVariable {
   layerName: string;
   effectName: string;
   effectType: string;
-  type: "SLIDER" | "CHECKBOX" | "TEXT" | "IMAGE" | "SELECT" | "COLOR";
+  type: "SLIDER" | "CHECKBOX" | "TEXT" | "IMAGE" | "SELECT" | "COLOR" | "VOICEOVER";
   label: string;
   groupName: string | null;
   validation: { min?: number; max?: number; step?: number } | null;
   defaultValue: string | null;
   sortOrder: number;
+  row?: number;
+  lines?: number;
+  clientVisible?: boolean;
+  clientLabel?: string | null;
 }
 
 interface FootageSlot {
@@ -30,6 +34,8 @@ interface FootageSlot {
   label: string;
   allowedFormats: string[];
   maxFileSize: number;
+  clientVisible?: boolean;
+  clientLabel?: string | null;
 }
 
 interface DynamicFormProps {
@@ -38,6 +44,10 @@ interface DynamicFormProps {
   onSubmit: (data: Record<string, string>, files: Record<string, File>) => void;
   loading?: boolean;
   submitLabel?: string;
+  clientMode?: boolean;
+  hideSubmitButton?: boolean;
+  defaultValues?: Record<string, string>;
+  formId?: string;
 }
 
 export function DynamicForm({
@@ -46,11 +56,18 @@ export function DynamicForm({
   onSubmit,
   loading,
   submitLabel,
+  clientMode,
+  hideSubmitButton,
+  defaultValues,
+  formId,
 }: DynamicFormProps) {
+  const displayVariables = clientMode
+    ? variables.filter((v) => v.clientVisible)
+    : variables;
   const [values, setValues] = useState<Record<string, string>>(() => {
     const defaults: Record<string, string> = {};
     variables.forEach((v) => {
-      defaults[v.id] = v.defaultValue || (v.type === "CHECKBOX" ? "0" : "");
+      defaults[v.id] = defaultValues?.[v.id] ?? v.defaultValue ?? (v.type === "CHECKBOX" ? "0" : "");
     });
     return defaults;
   });
@@ -74,7 +91,7 @@ export function DynamicForm({
   }
 
   // Group variables by groupName
-  const groups = variables.reduce(
+  const groups = displayVariables.reduce(
     (acc, v) => {
       const group = v.groupName || t("form.general");
       if (!acc[group]) acc[group] = [];
@@ -84,118 +101,217 @@ export function DynamicForm({
     {} as Record<string, TemplateVariable[]>
   );
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {Object.entries(groups).map(([groupName, vars]) => (
-        <Card key={groupName}>
-          <CardHeader>
-            <CardTitle className="text-lg">{groupName}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {vars.map((v) => (
-              <div key={v.id} className="space-y-2">
-                <Label htmlFor={v.id}>{v.label}</Label>
+  function renderVariable(v: TemplateVariable) {
+    const compact = clientMode;
+    return (
+      <div key={v.id} className={compact ? "space-y-1" : "space-y-2"}>
+        <Label htmlFor={v.id} className={compact ? "text-xs font-medium text-muted-foreground" : ""}>
+          {clientMode ? (v.clientLabel || v.label) : v.label}
+        </Label>
 
-                {v.type === "SLIDER" && (
-                  <div className="flex items-center gap-4">
-                    <Slider
-                      id={v.id}
-                      min={v.validation?.min ?? 0}
-                      max={v.validation?.max ?? 100}
-                      step={v.validation?.step ?? 0.01}
-                      value={[parseFloat(values[v.id]) || 0]}
-                      onValueChange={([val]) =>
-                        updateValue(v.id, val.toString())
-                      }
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={values[v.id]}
-                      onChange={(e) => updateValue(v.id, e.target.value)}
-                      step={v.validation?.step ?? 0.01}
-                      min={v.validation?.min}
-                      max={v.validation?.max}
-                      className="w-24"
-                    />
-                  </div>
-                )}
+        {v.type === "SLIDER" && (
+          <Input
+            id={v.id}
+            type="number"
+            value={values[v.id] ?? ""}
+            onChange={(e) => updateValue(v.id, e.target.value)}
+            step={v.validation?.step ?? 0.01}
+            min={v.validation?.min}
+            max={v.validation?.max}
+            className={compact ? "h-9" : ""}
+          />
+        )}
 
-                {v.type === "CHECKBOX" && (
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id={v.id}
-                      checked={values[v.id] === "1"}
-                      onCheckedChange={(checked) =>
-                        updateValue(v.id, checked ? "1" : "0")
-                      }
-                    />
-                    <Label htmlFor={v.id} className="text-sm font-normal">
-                      {t("form.enable")}
-                    </Label>
-                  </div>
-                )}
+        {v.type === "CHECKBOX" && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={v.id}
+              checked={values[v.id] === "1"}
+              onCheckedChange={(checked) =>
+                updateValue(v.id, checked ? "1" : "0")
+              }
+            />
+            <Label htmlFor={v.id} className="text-sm font-normal">
+              {t("form.enable")}
+            </Label>
+          </div>
+        )}
 
-                {v.type === "TEXT" && (
-                  <Input
-                    id={v.id}
-                    value={values[v.id]}
-                    onChange={(e) => updateValue(v.id, e.target.value)}
-                  />
-                )}
-
-                {v.type === "COLOR" && (
-                  <Input
-                    id={v.id}
-                    type="color"
-                    value={values[v.id] || "#000000"}
-                    onChange={(e) => updateValue(v.id, e.target.value)}
-                  />
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  {v.layerName} &rarr; {v.effectName} [{v.effectType}]
+        {(v.type === "TEXT" || v.type === "VOICEOVER") && (
+          <>
+            {v.lines && v.lines > 1 ? (
+              <Textarea
+                id={v.id}
+                value={values[v.id] ?? ""}
+                onChange={(e) => updateValue(v.id, e.target.value)}
+                rows={v.lines}
+                className={compact ? "resize-none" : ""}
+              />
+            ) : (
+              <Input
+                id={v.id}
+                value={values[v.id] ?? ""}
+                onChange={(e) => updateValue(v.id, e.target.value)}
+                className={compact ? "h-9" : ""}
+              />
+            )}
+            {v.type === "TEXT" && values[v.id]?.length > 0 && (() => {
+              const maxChars = (v.validation as Record<string, number> | null)?.maxChars;
+              if (maxChars == null || maxChars <= 0) return null;
+              const len = values[v.id]?.length || 0;
+              const over = len > maxChars;
+              return (
+                <p className={`text-xs ${over ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                  {len}/{maxChars} {t("form.chars")}{over ? ` — ${t("form.textTooLong")}` : ""}
                 </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ))}
+              );
+            })()}
+            {v.type === "VOICEOVER" && values[v.id]?.length > 0 && (() => {
+              const cps = (v.validation as Record<string, number> | null)?.charsPerSecond || 15;
+              const maxDur = (v.validation as Record<string, number> | null)?.maxDuration;
+              const duration = (values[v.id]?.length || 0) / cps;
+              const over = maxDur != null && maxDur > 0 && duration > maxDur;
+              return (
+                <p className={`text-xs ${over ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                  {t("form.estimatedDuration")}: ~{duration.toFixed(1)} s{over ? ` — ${t("form.voiceoverTooLong")}` : ""}
+                </p>
+              );
+            })()}
+          </>
+        )}
 
-      {footageSlots.length > 0 && (
-        <>
-          <Separator />
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">{t("form.images")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {footageSlots.map((slot) => (
-                <div key={slot.id} className="space-y-2">
-                  <Label htmlFor={`file-${slot.id}`}>{slot.label}</Label>
-                  <Input
-                    id={`file-${slot.id}`}
-                    type="file"
-                    accept={slot.allowedFormats
-                      .map((f) => `.${f}`)
-                      .join(",")}
-                    onChange={(e) =>
-                      handleFileChange(slot.id, e.target.files?.[0])
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t("form.replaces")}: {slot.footageItemName} ({slot.folderPath})
-                  </p>
+        {v.type === "COLOR" && (
+          <Input
+            id={v.id}
+            type="color"
+            value={values[v.id] || "#000000"}
+            onChange={(e) => updateValue(v.id, e.target.value)}
+            className={compact ? "h-9" : ""}
+          />
+        )}
+
+        {!clientMode && (
+          <p className="text-xs text-muted-foreground">
+            {v.layerName} &rarr; {v.effectName} [{v.effectType}]
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const displaySlots = clientMode
+    ? footageSlots.filter((s) => s.clientVisible)
+    : footageSlots;
+
+  return (
+    <form id={formId} onSubmit={handleSubmit} className={clientMode ? "space-y-4" : "space-y-6"}>
+      {clientMode ? (
+        <Card>
+          <CardContent className="space-y-3 pt-5 pb-5">
+            {Object.entries(
+              displayVariables.reduce(
+                (acc, v) => {
+                  const r = v.row ?? 0;
+                  if (!acc[r]) acc[r] = [];
+                  acc[r].push(v);
+                  return acc;
+                },
+                {} as Record<number, TemplateVariable[]>
+              )
+            )
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([rowNum, vars]) => (
+                <div
+                  key={rowNum}
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: `repeat(${vars.length}, minmax(0, 1fr))` }}
+                >
+                  {vars.map((v) => renderVariable(v))}
                 </div>
               ))}
-            </CardContent>
-          </Card>
+
+            {displaySlots.length > 0 && (
+              <>
+                <Separator className="my-1" />
+                <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(displaySlots.length, 3)}, minmax(0, 1fr))` }}>
+                  {displaySlots.map((slot) => (
+                    <div key={slot.id} className="space-y-1">
+                      <Label htmlFor={`file-${slot.id}`} className="text-xs font-medium text-muted-foreground">
+                        {slot.clientLabel || slot.label}
+                      </Label>
+                      <Input
+                        id={`file-${slot.id}`}
+                        type="file"
+                        accept={slot.allowedFormats
+                          .map((f) => `.${f}`)
+                          .join(",")}
+                        onChange={(e) =>
+                          handleFileChange(slot.id, e.target.files?.[0])
+                        }
+                        className="h-9"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {Object.entries(groups).map(([groupName, vars]) => (
+            <Card key={groupName}>
+              <CardHeader>
+                <CardTitle className="text-lg">{groupName}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {vars.map((v) => renderVariable(v))}
+              </CardContent>
+            </Card>
+          ))}
+
+          {displaySlots.length > 0 && (
+            <>
+              <Separator />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">{t("form.images")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {displaySlots.map((slot) => (
+                    <div key={slot.id} className="space-y-2">
+                      <Label htmlFor={`file-${slot.id}`}>
+                        {slot.clientLabel || slot.label}
+                      </Label>
+                      <Input
+                        id={`file-${slot.id}`}
+                        type="file"
+                        accept={slot.allowedFormats
+                          .map((f) => `.${f}`)
+                          .join(",")}
+                        onChange={(e) =>
+                          handleFileChange(slot.id, e.target.files?.[0])
+                        }
+                      />
+                      {!clientMode && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("form.replaces")}: {slot.footageItemName} ({slot.folderPath})
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </>
       )}
 
-      <Button type="submit" disabled={loading} className="w-full" size="lg">
-        {loading ? t("form.submitting") : (submitLabel || t("form.submitRenderJob"))}
-      </Button>
+      {!hideSubmitButton && (
+        <Button type="submit" disabled={loading} className={clientMode ? "w-full" : "w-full"} size={clientMode ? "default" : "lg"}>
+          {loading ? t("form.submitting") : (submitLabel || t("form.submitRenderJob"))}
+        </Button>
+      )}
     </form>
   );
 }

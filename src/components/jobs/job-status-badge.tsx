@@ -5,6 +5,7 @@ import { JobStatus } from "@/generated/prisma/client";
 import { useTranslation } from "@/lib/i18n";
 
 const statusConfig: Record<JobStatus, { key: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  DRAFT: { key: "status.draft", variant: "secondary" },
   AWAITING_APPROVAL: { key: "status.awaitingApproval", variant: "outline" },
   PENDING: { key: "status.pending", variant: "secondary" },
   DOWNLOADING: { key: "status.downloading", variant: "outline" },
@@ -31,6 +32,8 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
           ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
           : status === "AWAITING_APPROVAL"
           ? "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/30"
+          : status === "DRAFT"
+          ? "bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-900/30 dark:text-gray-400 dark:hover:bg-gray-900/30"
           : status === "REJECTED"
           ? "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30"
           : undefined

@@ -7,12 +7,16 @@ const variableSchema = z.object({
   layerName: z.string().min(1),
   effectName: z.string().min(1),
   effectType: z.string().default("Slider"),
-  type: z.enum(["SLIDER", "CHECKBOX", "TEXT", "IMAGE", "SELECT", "COLOR"]),
+  type: z.enum(["SLIDER", "CHECKBOX", "TEXT", "IMAGE", "SELECT", "COLOR", "VOICEOVER"]),
   label: z.string().min(1),
   groupName: z.string().optional(),
   validation: z.any().optional(),
   defaultValue: z.string().optional(),
   sortOrder: z.number().default(0),
+  row: z.number().default(0),
+  lines: z.number().default(1),
+  clientVisible: z.boolean().default(false),
+  clientLabel: z.string().optional(),
 });
 
 const bulkSchema = z.object({
@@ -53,24 +57,32 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Replace all variables for this template
-  await prisma.$transaction([
-    prisma.templateVariable.deleteMany({ where: { templateId: id } }),
-    ...parsed.data.variables.map((v, i) =>
-      prisma.templateVariable.create({
-        data: {
-          ...v,
-          templateId: id,
-          sortOrder: v.sortOrder ?? i,
-        },
-      })
-    ),
-  ]);
+  try {
+    // Replace all variables for this template
+    await prisma.$transaction([
+      prisma.templateVariable.deleteMany({ where: { templateId: id } }),
+      ...parsed.data.variables.map((v, i) =>
+        prisma.templateVariable.create({
+          data: {
+            ...v,
+            templateId: id,
+            sortOrder: v.sortOrder ?? i,
+          },
+        })
+      ),
+    ]);
 
-  const variables = await prisma.templateVariable.findMany({
-    where: { templateId: id },
-    orderBy: { sortOrder: "asc" },
-  });
+    const variables = await prisma.templateVariable.findMany({
+      where: { templateId: id },
+      orderBy: { sortOrder: "asc" },
+    });
 
-  return NextResponse.json(variables);
+    return NextResponse.json(variables);
+  } catch (err) {
+    console.error("Variables PUT error:", err);
+    return NextResponse.json(
+      { error: String(err) },
+      { status: 500 }
+    );
+  }
 }

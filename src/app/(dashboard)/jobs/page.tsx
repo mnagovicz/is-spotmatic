@@ -22,14 +22,66 @@ import {
 } from "@/components/ui/select";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+interface TemplateVariable {
+  id: string;
+  label: string;
+  clientVisible: boolean;
+  clientLabel: string | null;
+}
+
+interface JobData {
+  id: string;
+  key: string;
+  value: string;
+}
+
+function ExpandedRow({ jobId }: { jobId: string }) {
+  const { data: job } = useSWR(`/api/jobs/${jobId}`, fetcher);
+  const { t } = useTranslation();
+
+  if (!job) return (
+    <TableRow>
+      <TableCell colSpan={7} className="bg-muted/30 py-3 px-8">
+        {t("common.loading")}
+      </TableCell>
+    </TableRow>
+  );
+
+  const variables: TemplateVariable[] = job.template?.variables || [];
+  const jobData: JobData[] = job.jobData || [];
+
+  const visibleVars = variables.filter((v) => v.clientVisible);
+
+  if (visibleVars.length === 0) return null;
+
+  return (
+    <TableRow>
+      <TableCell colSpan={7} className="bg-muted/30 p-0">
+        <div className="flex flex-wrap gap-6 px-8 py-3">
+          {visibleVars.map((v) => {
+            const data = jobData.find((d) => d.key === v.id);
+            return (
+              <div key={v.id} className="text-sm">
+                <span className="text-muted-foreground">{v.clientLabel || v.label}: </span>
+                <span className="font-medium">{data?.value || "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const queryParams = statusFilter !== "all" ? `?status=${statusFilter}` : "";
   const { data } = useSWR(`/api/jobs${queryParams}`, fetcher, {
     refreshInterval: 5000,
@@ -101,42 +153,57 @@ export default function JobsPage() {
                   createdBy: { name: string | null; email: string };
                   agent: { name: string } | null;
                 }) => (
-                  <TableRow key={job.id}>
-                    <TableCell>
-                      <Link
-                        href={`/jobs/${job.id}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {job.jobName || job.id.slice(0, 8)}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{job.template.name}</TableCell>
-                    <TableCell>
-                      {job.createdBy.name || job.createdBy.email}
-                    </TableCell>
-                    <TableCell>
-                      <JobStatusBadge status={job.status} />
-                    </TableCell>
-                    <TableCell>
-                      {["DOWNLOADING", "RENDERING", "UPLOADING"].includes(
-                        job.status
-                      ) ? (
-                        <Progress value={job.progress} className="w-24" />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          {job.progress}%
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {job.agent?.name || "-"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDistanceToNow(new Date(job.createdAt), {
-                        addSuffix: true,
-                      })}
-                    </TableCell>
-                  </TableRow>
+                  <>
+                    <TableRow
+                      key={job.id}
+                      className="cursor-pointer"
+                      onClick={() =>
+                        setExpandedId(expandedId === job.id ? null : job.id)
+                      }
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <ChevronDown
+                            className={`h-4 w-4 text-muted-foreground transition-transform ${
+                              expandedId === job.id ? "rotate-180" : ""
+                            }`}
+                          />
+                          <span className="font-medium">
+                            {job.jobName || job.id.slice(0, 8)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{job.template.name}</TableCell>
+                      <TableCell>
+                        {job.createdBy.name || job.createdBy.email}
+                      </TableCell>
+                      <TableCell>
+                        <JobStatusBadge status={job.status} />
+                      </TableCell>
+                      <TableCell>
+                        {["DOWNLOADING", "RENDERING", "UPLOADING"].includes(
+                          job.status
+                        ) ? (
+                          <Progress value={job.progress} className="w-24" />
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            {job.progress}%
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {job.agent?.name || "-"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDistanceToNow(new Date(job.createdAt), {
+                          addSuffix: true,
+                        })}
+                      </TableCell>
+                    </TableRow>
+                    {expandedId === job.id && (
+                      <ExpandedRow key={`${job.id}-detail`} jobId={job.id} />
+                    )}
+                  </>
                 )
               )}
               {(!data?.jobs || data.jobs.length === 0) && (

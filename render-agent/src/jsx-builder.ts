@@ -98,11 +98,36 @@ export function buildJsx(
 
   // Set variables
   if (variables.length > 0) {
-    jsx += `    // Set controller values\n`;
-    for (const v of variables) {
-      const effectAccess =
-        v.effectType === "Checkbox" ? "Checkbox" : "Slider";
-      jsx += `    var layer = findLayerInComps("${v.layerName}");
+    // Text layers (Source Text)
+    const textVars = variables.filter((v) => v.effectType === "Text");
+    if (textVars.length > 0) {
+      jsx += `    // Set text layer values\n`;
+      for (const v of textVars) {
+        const escaped = String(v.value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        jsx += `    var textLayer = findLayerInComps("${v.layerName}");
+    if (textLayer) {
+      try {
+        var srcText = textLayer.property("ADBE Text Properties").property("ADBE Text Document");
+        if (srcText) {
+          var textDoc = srcText.value;
+          textDoc.text = "${escaped}";
+          srcText.setValue(textDoc);
+        }
+      } catch(e) {
+        $.writeln("Warning: Could not set text on ${v.layerName}: " + e.message);
+      }
+    }\n\n`;
+      }
+    }
+
+    // Effect controls (Slider, Checkbox, Color, etc.)
+    const effectVars = variables.filter((v) => v.effectType !== "Text");
+    if (effectVars.length > 0) {
+      jsx += `    // Set controller values\n`;
+      for (const v of effectVars) {
+        const effectAccess =
+          v.effectType === "Checkbox" ? "Checkbox" : "Slider";
+        jsx += `    var layer = findLayerInComps("${v.layerName}");
     if (layer) {
       try {
         layer.effect("${v.effectName}")("${effectAccess}").setValue(${v.value});
@@ -110,6 +135,7 @@ export function buildJsx(
         $.writeln("Warning: Could not set ${v.effectName} on ${v.layerName}: " + e.message);
       }
     }\n\n`;
+      }
     }
   }
 

@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Settings, Trash2 } from "lucide-react";
+import { Palette, Plus, Settings, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/lib/i18n";
 
@@ -64,8 +64,21 @@ export default function TemplatesPage() {
     mutate();
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm(t("templates.deleteConfirm"))) return;
+  async function handleColorChange(id: string, color: string) {
+    await fetch(`/api/templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color }),
+    });
+    mutate();
+  }
+
+  async function handleDelete(id: string, jobCount: number) {
+    if (jobCount > 0) {
+      if (!confirm(t("templates.deleteWithJobsConfirm", { count: String(jobCount) }))) return;
+    } else {
+      if (!confirm(t("templates.deleteConfirm"))) return;
+    }
     await fetch(`/api/templates/${id}`, { method: "DELETE" });
     mutate();
   }
@@ -146,6 +159,7 @@ export default function TemplatesPage() {
                 (tmpl: {
                   id: string;
                   name: string;
+                  color: string | null;
                   isActive: boolean;
                   organization: { name: string };
                   _count: { variables: number; footageSlots: number; renderJobs: number };
@@ -162,7 +176,30 @@ export default function TemplatesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2">
+                        <div
+                          className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border hover:bg-accent"
+                          title={t("templates.color")}
+                        >
+                          <input
+                            type="color"
+                            defaultValue={tmpl.color || "#888888"}
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                            ref={(el) => {
+                              if (!el) return;
+                              el.onchange = () =>
+                                handleColorChange(tmpl.id, el.value);
+                            }}
+                          />
+                          {tmpl.color ? (
+                            <span
+                              className="pointer-events-none h-4 w-4 rounded-full border"
+                              style={{ backgroundColor: tmpl.color }}
+                            />
+                          ) : (
+                            <Palette className="pointer-events-none h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
                         <Link href={`/templates/${tmpl.id}/editor`}>
                           <Button variant="outline" size="sm">
                             <Settings className="mr-1 h-3 w-3" /> {t("templates.editor")}
@@ -171,7 +208,7 @@ export default function TemplatesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(tmpl.id)}
+                          onClick={() => handleDelete(tmpl.id, tmpl._count.renderJobs)}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>

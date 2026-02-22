@@ -634,6 +634,102 @@ function findEffectsForController(
   return effects;
 }
 
+// ─── Text Layer Detection ────────────────────────────────
+
+/**
+ * Find text layers in the AEP file.
+ * Text layers are identified by "Layrldta" followed by a layer name
+ * and then "(ADBE Text Properties)" nearby in the binary.
+ * The real layer name (including diacritics) is extracted from the
+ * UTF-8 encoded section after the "Utf8" marker.
+ * Layers whose Source Text is driven by an expression are excluded
+ * (they get their values from controllers, not user input).
+ * Each text layer is returned as a controller with a single "Source Text" effect of type "Text".
+ */
+function findTextLayers(buffer: Buffer): AepController[] {
+  const textLayers: AepController[] = [];
+  const seen = new Set<string>();
+
+  const textPropsBuf = Buffer.from("(ADBE Text Properties", "ascii");
+  const layrLdtaBuf = Buffer.from("Layrldta", "ascii");
+  const utf8Buf = Buffer.from("Utf8", "ascii");
+  let pos = 0;
+
+  while (pos < buffer.length) {
+    const idx = buffer.indexOf(textPropsBuf, pos);
+    if (idx === -1) break;
+
+    // Check if this text layer is expression-driven (skip it if so)
+    const afterEnd = Math.min(buffer.length, idx + 2048);
+    const afterRegion = buffer.subarray(idx, afterEnd).toString("ascii");
+    const hasExpression =
+      afterRegion.includes("thisComp") ||
+      afterRegion.includes("effect(") ||
+      afterRegion.includes("toFixed(") ||
+      afterRegion.includes("linear(") ||
+      afterRegion.includes("toString()");
+
+    if (!hasExpression) {
+      // Find the Layrldta marker before this text props occurrence
+      const scanStart = Math.max(0, idx - 500);
+      const region = buffer.subarray(scanStart, idx);
+      const layrPos = region.lastIndexOf(layrLdtaBuf);
+
+      if (layrPos !== -1) {
+        // Find the first Utf8 marker after Layrldta
+        const afterLayr = region.subarray(layrPos + 8);
+        const utf8Pos = afterLayr.indexOf(utf8Buf);
+
+        if (utf8Pos !== -1) {
+          // Read the UTF-8 encoded layer name after the Utf8 marker.
+          // Skip any leading non-printable bytes, then read until
+          // a null byte or "LIST" marker.
+          let nameStart = utf8Pos + 4;
+          while (
+            nameStart < afterLayr.length &&
+            afterLayr[nameStart] < 0x20
+          ) {
+            nameStart++;
+          }
+          let nameEnd = nameStart;
+          while (nameEnd < afterLayr.length) {
+            if (afterLayr[nameEnd] === 0x00) break;
+            if (
+              nameEnd + 4 <= afterLayr.length &&
+              afterLayr.subarray(nameEnd, nameEnd + 4).toString("ascii") ===
+                "LIST"
+            ) {
+              break;
+            }
+            nameEnd++;
+          }
+
+          const name = afterLayr
+            .subarray(nameStart, nameEnd)
+            .toString("utf-8")
+            .trim();
+
+          if (
+            name.length >= 2 &&
+            name.length < 100 &&
+            !seen.has(name)
+          ) {
+            seen.add(name);
+            textLayers.push({
+              layerName: name,
+              effects: [{ name: "Source Text", type: "Text" }],
+            });
+          }
+        }
+      }
+    }
+
+    pos = idx + 1;
+  }
+
+  return textLayers;
+}
+
 // ─── Footage Detection ──────────────────────────────────
 
 /**
@@ -943,8 +1039,17 @@ export function analyzeAep(buffer: Buffer): AepAnalysis {
   // Run each detector
   const compositions = findCompositions(allStrings, buffer);
   const controllers = findControllers(allStrings, buffer);
+  const textLayers = findTextLayers(buffer);
   const footageItems = findFootageItems(allStrings);
   const fonts = findFonts(allStrings, buffer);
+
+  // Merge text layers into controllers (skip duplicates)
+  const controllerNames = new Set(controllers.map((c) => c.layerName));
+  for (const tl of textLayers) {
+    if (!controllerNames.has(tl.layerName)) {
+      controllers.push(tl);
+    }
+  }
 
   return {
     compositions,

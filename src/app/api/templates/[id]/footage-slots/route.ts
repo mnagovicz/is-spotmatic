@@ -5,11 +5,13 @@ import { z } from "zod";
 
 const slotSchema = z.object({
   footageItemName: z.string().min(1),
-  folderPath: z.string().min(1),
+  folderPath: z.string().default(""),
   label: z.string().min(1),
   allowedFormats: z.array(z.string()).optional(),
   maxFileSize: z.number().optional(),
   sortOrder: z.number().default(0),
+  clientVisible: z.boolean().default(false),
+  clientLabel: z.string().optional(),
 });
 
 const bulkSchema = z.object({
@@ -50,18 +52,23 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  await prisma.$transaction([
-    prisma.footageSlot.deleteMany({ where: { templateId: id } }),
-    ...parsed.data.slots.map((s, i) =>
-      prisma.footageSlot.create({
-        data: {
-          ...s,
-          templateId: id,
-          sortOrder: s.sortOrder ?? i,
-        },
-      })
-    ),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.footageSlot.deleteMany({ where: { templateId: id } }),
+      ...parsed.data.slots.map((s, i) =>
+        prisma.footageSlot.create({
+          data: {
+            ...s,
+            templateId: id,
+            sortOrder: s.sortOrder ?? i,
+          },
+        })
+      ),
+    ]);
+  } catch (err) {
+    console.error("Footage slots save error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 
   const slots = await prisma.footageSlot.findMany({
     where: { templateId: id },

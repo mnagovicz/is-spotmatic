@@ -8,8 +8,9 @@ export default async function PortalPage() {
 
   const where = { createdById: session.user.id };
 
-  const [total, awaiting, inProgress, completed, rejected] = await Promise.all([
+  const [total, drafts, awaiting, inProgress, completed, rejected] = await Promise.all([
     prisma.renderJob.count({ where }),
+    prisma.renderJob.count({ where: { ...where, status: "DRAFT" } }),
     prisma.renderJob.count({ where: { ...where, status: "AWAITING_APPROVAL" } }),
     prisma.renderJob.count({
       where: { ...where, status: { in: ["PENDING", "DOWNLOADING", "RENDERING", "UPLOADING"] } },
@@ -30,6 +31,7 @@ export default async function PortalPage() {
     <PortalDashboard
       userName={session.user.name || ""}
       total={total}
+      drafts={drafts}
       awaiting={awaiting}
       inProgress={inProgress}
       completed={completed}

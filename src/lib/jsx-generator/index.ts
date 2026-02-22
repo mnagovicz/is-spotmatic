@@ -156,9 +156,41 @@ export function generateJsx(input: JsxGeneratorInput): string {
     lines.push("  }");
     lines.push("");
 
+    // Split variables into text layers (Source Text) and effect controls
+    const textVars = variables.filter((v) => v.effectType.toLowerCase() === "text");
+    const effectVars = variables.filter((v) => v.effectType.toLowerCase() !== "text");
+
+    // ── Text layers (Source Text) ──
+    if (textVars.length > 0) {
+      lines.push("  // ── Set Source Text on text layers ──");
+      for (const v of textVars) {
+        const varName = sanitizeVarName(v.layerName);
+        const escapedValue = escapeJsString(String(v.value));
+        lines.push(`  // Text layer: ${v.layerName}`);
+        lines.push(`  var textLayer_${varName} = findLayerByName("${escapeJsString(v.layerName)}");`);
+        lines.push(`  if (textLayer_${varName} !== null) {`);
+        lines.push("    try {");
+        lines.push(`      var srcText = textLayer_${varName}.property("ADBE Text Properties").property("ADBE Text Document");`);
+        lines.push("      if (srcText !== null) {");
+        lines.push(`        var textDoc = srcText.value;`);
+        lines.push(`        textDoc.text = "${escapedValue}";`);
+        lines.push(`        srcText.setValue(textDoc);`);
+        lines.push(`        $.writeln("Set text on layer '${escapeJsString(v.layerName)}': ${escapedValue}");`);
+        lines.push("      }");
+        lines.push("    } catch (e) {");
+        lines.push(`      $.writeln("ERROR setting text on '${escapeJsString(v.layerName)}': " + e.message);`);
+        lines.push("    }");
+        lines.push("  } else {");
+        lines.push(`    $.writeln("WARNING: Text layer '${escapeJsString(v.layerName)}' not found in project");`);
+        lines.push("  }");
+        lines.push("");
+      }
+    }
+
+    // ── Effect controls (Slider, Checkbox, Color, etc.) ──
     // Group variables by layerName for efficiency
     const groupedByLayer = new Map<string, JsxVariable[]>();
-    for (const v of variables) {
+    for (const v of effectVars) {
       const existing = groupedByLayer.get(v.layerName) || [];
       existing.push(v);
       groupedByLayer.set(v.layerName, existing);
