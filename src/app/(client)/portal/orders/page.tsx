@@ -23,6 +23,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 import { JobStatus } from "@/generated/prisma/client";
 import { ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -174,9 +175,8 @@ export default function PortalOrdersPage() {
                   template: { name: string } | null;
                   deliveryDestination: { name: string } | null;
                 }) => (
-                  <>
+                  <Fragment key={job.id}>
                     <TableRow
-                      key={job.id}
                       className="cursor-pointer"
                       onClick={() =>
                         setExpandedId(expandedId === job.id ? null : job.id)
@@ -235,7 +235,7 @@ export default function PortalOrdersPage() {
                     {expandedId === job.id && (
                       <ExpandedRow key={`${job.id}-detail`} jobId={job.id} />
                     )}
-                  </>
+                  </Fragment>
                 )
               )}
               {(!data?.jobs || data.jobs.length === 0) && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -161,9 +161,8 @@ function RecentOrdersTable({ recentOrders }: { recentOrders: RecentOrder[] }) {
             </TableHeader>
             <TableBody>
               {recentOrders.map((order) => (
-                <>
+                <Fragment key={order.id}>
                   <TableRow
-                    key={order.id}
                     className="cursor-pointer"
                     onClick={() =>
                       setExpandedId(expandedId === order.id ? null : order.id)
@@ -222,7 +221,7 @@ function RecentOrdersTable({ recentOrders }: { recentOrders: RecentOrder[] }) {
                   {expandedId === order.id && (
                     <ExpandedRow key={`${order.id}-detail`} jobId={order.id} />
                   )}
-                </>
+                </Fragment>
               ))}
             </TableBody>
           </Table>
