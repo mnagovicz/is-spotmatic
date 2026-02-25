@@ -33,6 +33,8 @@ export default function PortalOrderPage() {
   const [dueDate, setDueDate] = useState("");
   const [broadcastDate, setBroadcastDate] = useState("");
   const [deliveryDestinationId, setDeliveryDestinationId] = useState("");
+  const [voiceoverVolumeDb, setVoiceoverVolumeDb] = useState<number | undefined>();
+  const [backgroundVolumeDb, setBackgroundVolumeDb] = useState<number | undefined>();
   const { t } = useTranslation();
   const draftRef = useRef(false);
 
@@ -82,6 +84,8 @@ export default function PortalOrderPage() {
           data: { ...data, ...fileUploads },
           draft: isDraft,
           deliveryDestinationId: deliveryDestinationId || undefined,
+          voiceoverVolumeDb,
+          backgroundVolumeDb,
         }),
       });
 
@@ -166,6 +170,10 @@ export default function PortalOrderPage() {
         clientMode
         hideSubmitButton
         formId="order-form"
+        allowAudioEdit={template.allowClientAudioEdit}
+        voiceoverVolumeDb={voiceoverVolumeDb ?? template.voiceoverVolumeDb ?? 0}
+        backgroundVolumeDb={backgroundVolumeDb ?? template.backgroundVolumeDb ?? -10}
+        onVolumeChange={(vo, bg) => { setVoiceoverVolumeDb(vo); setBackgroundVolumeDb(bg); }}
       />
 
       <div className="flex gap-3">

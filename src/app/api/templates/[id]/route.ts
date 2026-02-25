@@ -13,6 +13,12 @@ const updateSchema = z.object({
   aepFileUrl: z.string().optional(),
   aepFileName: z.string().optional(),
   aepFileSize: z.number().optional(),
+  backgroundAudioUrl: z.string().nullable().optional(),
+  backgroundAudioName: z.string().nullable().optional(),
+  fps: z.number().int().min(1).optional(),
+  voiceoverVolumeDb: z.number().optional(),
+  backgroundVolumeDb: z.number().optional(),
+  allowClientAudioEdit: z.boolean().optional(),
 });
 
 export async function GET(

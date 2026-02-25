@@ -40,6 +40,8 @@ export default function EditDraftPage() {
   const [broadcastDate, setBroadcastDate] = useState("");
   const [ready, setReady] = useState(false);
   const [deliveryDestinationId, setDeliveryDestinationId] = useState("");
+  const [voiceoverVolumeDb, setVoiceoverVolumeDb] = useState<number | undefined>();
+  const [backgroundVolumeDb, setBackgroundVolumeDb] = useState<number | undefined>();
   const { t } = useTranslation();
   const submitRef = useRef(false);
 
@@ -53,6 +55,8 @@ export default function EditDraftPage() {
       if (job.dueDate) setDueDate(job.dueDate.slice(0, 16));
       if (job.broadcastDate) setBroadcastDate(job.broadcastDate.slice(0, 16));
       if (job.deliveryDestinationId) setDeliveryDestinationId(job.deliveryDestinationId);
+      if (job.voiceoverVolumeDb != null) setVoiceoverVolumeDb(job.voiceoverVolumeDb);
+      if (job.backgroundVolumeDb != null) setBackgroundVolumeDb(job.backgroundVolumeDb);
       setReady(true);
     }
   }, [job, ready, router, id]);
@@ -103,6 +107,8 @@ export default function EditDraftPage() {
           data: { ...data, ...fileUploads },
           submit: isSubmit,
           deliveryDestinationId: deliveryDestinationId || null,
+          voiceoverVolumeDb,
+          backgroundVolumeDb,
         }),
       });
 
@@ -189,6 +195,10 @@ export default function EditDraftPage() {
         hideSubmitButton
         defaultValues={defaultValues}
         formId="edit-draft-form"
+        allowAudioEdit={template?.allowClientAudioEdit}
+        voiceoverVolumeDb={voiceoverVolumeDb ?? template?.voiceoverVolumeDb ?? 0}
+        backgroundVolumeDb={backgroundVolumeDb ?? template?.backgroundVolumeDb ?? -10}
+        onVolumeChange={(vo, bg) => { setVoiceoverVolumeDb(vo); setBackgroundVolumeDb(bg); }}
       />
 
       <div className="flex gap-3">

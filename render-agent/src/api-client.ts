@@ -23,6 +23,13 @@ export interface TemplateVariable {
   effectType: string;
   type: string;
   label: string;
+  validation?: {
+    voiceId?: string;
+    startFrame?: number;
+    charsPerSecond?: number;
+    maxDuration?: number;
+    [key: string]: unknown;
+  } | null;
 }
 
 export interface FootageSlot {
@@ -38,6 +45,12 @@ export interface Template {
   aepFileName?: string;
   exportCompName: string;
   controlCompName?: string;
+  fps: number;
+  voiceoverVolumeDb: number;
+  backgroundVolumeDb: number;
+  backgroundAudioUrl?: string;
+  backgroundAudioName?: string;
+  allowClientAudioEdit: boolean;
   variables: TemplateVariable[];
   footageSlots: FootageSlot[];
 }
@@ -48,6 +61,8 @@ export interface RenderJob {
   status: string;
   priority: number;
   progress: number;
+  voiceoverVolumeDb?: number;
+  backgroundVolumeDb?: number;
   template: Template;
   jobData: JobData[];
   jobAssets: JobAsset[];

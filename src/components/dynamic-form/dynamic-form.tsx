@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useTranslation } from "@/lib/i18n";
+import { Play, Square, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface TemplateVariable {
   id: string;
@@ -18,7 +20,7 @@ interface TemplateVariable {
   type: "SLIDER" | "CHECKBOX" | "TEXT" | "IMAGE" | "SELECT" | "COLOR" | "VOICEOVER";
   label: string;
   groupName: string | null;
-  validation: { min?: number; max?: number; step?: number } | null;
+  validation: { min?: number; max?: number; step?: number; voiceId?: string; charsPerSecond?: number; maxDuration?: number; startFrame?: number } | null;
   defaultValue: string | null;
   sortOrder: number;
   row?: number;
@@ -48,6 +50,10 @@ interface DynamicFormProps {
   hideSubmitButton?: boolean;
   defaultValues?: Record<string, string>;
   formId?: string;
+  allowAudioEdit?: boolean;
+  voiceoverVolumeDb?: number;
+  backgroundVolumeDb?: number;
+  onVolumeChange?: (voiceoverVolumeDb: number, backgroundVolumeDb: number) => void;
 }
 
 export function DynamicForm({
@@ -60,6 +66,10 @@ export function DynamicForm({
   hideSubmitButton,
   defaultValues,
   formId,
+  allowAudioEdit,
+  voiceoverVolumeDb,
+  backgroundVolumeDb,
+  onVolumeChange,
 }: DynamicFormProps) {
   const displayVariables = clientMode
     ? variables.filter((v) => v.clientVisible)
@@ -74,6 +84,47 @@ export function DynamicForm({
 
   const [files, setFiles] = useState<Record<string, File>>({});
   const { t } = useTranslation();
+
+  // Voiceover preview state
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopPreview = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setPlayingId(null);
+  }, []);
+
+  const playPreview = useCallback(async (variableId: string, text: string, voiceId: string) => {
+    stopPreview();
+    setPreviewLoading(variableId);
+    try {
+      const res = await fetch("/api/tts/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceId }),
+      });
+      if (!res.ok) throw new Error("TTS failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setPlayingId(null);
+        audioRef.current = null;
+      };
+      await audio.play();
+      setPlayingId(variableId);
+    } catch {
+      toast.error(t("toast.ttsPreviewFailed"));
+    }
+    setPreviewLoading(null);
+  }, [stopPreview, t]);
 
   function updateValue(id: string, value: string) {
     setValues((prev) => ({ ...prev, [id]: value }));
@@ -177,6 +228,29 @@ export function DynamicForm({
                 </p>
               );
             })()}
+            {v.type === "VOICEOVER" && v.validation?.voiceId && (
+              <div className="flex gap-2">
+                {playingId === v.id ? (
+                  <Button type="button" size="sm" variant="outline" onClick={stopPreview}>
+                    <Square className="mr-1 h-3 w-3" /> {t("form.stopPreview")}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!values[v.id]?.trim() || previewLoading === v.id}
+                    onClick={() => playPreview(v.id, values[v.id], v.validation!.voiceId!)}
+                  >
+                    {previewLoading === v.id ? (
+                      <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> {t("form.generatingPreview")}</>
+                    ) : (
+                      <><Play className="mr-1 h-3 w-3" /> {t("form.previewVoiceover")}</>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -305,6 +379,33 @@ export function DynamicForm({
             </>
           )}
         </>
+      )}
+
+      {allowAudioEdit && onVolumeChange && (
+        <Card>
+          <CardContent className="pt-5 pb-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">{t("form.voiceoverVolume")} (dB)</Label>
+                <Input
+                  type="number"
+                  step={0.5}
+                  value={voiceoverVolumeDb ?? 0}
+                  onChange={(e) => onVolumeChange(parseFloat(e.target.value) || 0, backgroundVolumeDb ?? -10)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">{t("form.backgroundVolume")} (dB)</Label>
+                <Input
+                  type="number"
+                  step={0.5}
+                  value={backgroundVolumeDb ?? -10}
+                  onChange={(e) => onVolumeChange(voiceoverVolumeDb ?? 0, parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {!hideSubmitButton && (

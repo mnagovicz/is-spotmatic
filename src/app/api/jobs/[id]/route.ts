@@ -65,6 +65,8 @@ const updateDraftSchema = z.object({
   data: z.record(z.string(), z.string()).optional(),
   submit: z.boolean().default(false),
   deliveryDestinationId: z.string().nullable().optional(),
+  voiceoverVolumeDb: z.number().nullable().optional(),
+  backgroundVolumeDb: z.number().nullable().optional(),
 });
 
 export async function PUT(
@@ -100,7 +102,7 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { jobName, dueDate, broadcastDate, data, submit, deliveryDestinationId } = parsed.data;
+  const { jobName, dueDate, broadcastDate, data, submit, deliveryDestinationId, voiceoverVolumeDb, backgroundVolumeDb } = parsed.data;
 
   const updatedJob = await prisma.$transaction(async (tx: typeof prisma) => {
     if (data) {
@@ -121,6 +123,8 @@ export async function PUT(
         ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
         ...(broadcastDate !== undefined && { broadcastDate: broadcastDate ? new Date(broadcastDate) : null }),
         ...(deliveryDestinationId !== undefined && { deliveryDestinationId }),
+        ...(voiceoverVolumeDb !== undefined && { voiceoverVolumeDb }),
+        ...(backgroundVolumeDb !== undefined && { backgroundVolumeDb }),
         ...(submit && { status: "AWAITING_APPROVAL" }),
       },
       include: {

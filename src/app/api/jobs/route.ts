@@ -13,6 +13,8 @@ const createJobSchema = z.object({
   data: z.record(z.string(), z.string()),
   draft: z.boolean().default(false),
   deliveryDestinationId: z.string().optional(),
+  voiceoverVolumeDb: z.number().optional(),
+  backgroundVolumeDb: z.number().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { templateId, organizationId, jobName, dueDate, broadcastDate, priority, data, draft, deliveryDestinationId } = parsed.data;
+  const { templateId, organizationId, jobName, dueDate, broadcastDate, priority, data, draft, deliveryDestinationId, voiceoverVolumeDb, backgroundVolumeDb } = parsed.data;
 
   const status = draft ? "DRAFT" : (session.user.role === "CLIENT" ? "AWAITING_APPROVAL" : "PENDING");
 
@@ -86,6 +88,8 @@ export async function POST(req: NextRequest) {
       broadcastDate: broadcastDate ? new Date(broadcastDate) : undefined,
       priority,
       deliveryDestinationId: deliveryDestinationId || undefined,
+      voiceoverVolumeDb,
+      backgroundVolumeDb,
       jobData: {
         create: Object.entries(data).map(([key, value]) => ({
           key,

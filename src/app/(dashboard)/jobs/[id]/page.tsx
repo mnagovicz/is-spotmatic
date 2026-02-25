@@ -16,6 +16,7 @@ import {
   Clock,
   Server,
   AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
@@ -28,7 +29,7 @@ export default function JobDetailPage() {
     refreshInterval: (data) => {
       if (!data) return 5000;
       if (["COMPLETED", "FAILED", "MANUAL"].includes(data.status)) return 0;
-      if (data.status === "RENDERING") return 2000;
+      if (["RENDERING", "GENERATING_TTS", "MIXING"].includes(data.status)) return 2000;
       return 5000;
     },
   });
@@ -53,6 +54,25 @@ export default function JobDetailPage() {
         progress: 0,
         agentId: null,
         errorMessage: null,
+      }),
+    });
+    if (res.ok) {
+      toast.success(t("toast.jobRequeued"));
+      mutate();
+    }
+  }
+
+  async function handleRerender() {
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "PENDING",
+        progress: 0,
+        agentId: null,
+        errorMessage: null,
+        completedAt: null,
+        startedAt: null,
       }),
     });
     if (res.ok) {
@@ -93,7 +113,7 @@ export default function JobDetailPage() {
       </div>
 
       {/* Progress */}
-      {["DOWNLOADING", "RENDERING", "UPLOADING"].includes(job.status) && (
+      {["DOWNLOADING", "GENERATING_TTS", "RENDERING", "MIXING", "UPLOADING"].includes(job.status) && (
         <Card>
           <CardContent className="py-6">
             <div className="space-y-2">
@@ -142,12 +162,18 @@ export default function JobDetailPage() {
                 <Download className="mr-2 h-4 w-4" /> {t("jobs.detail.downloadAep")}
               </Button>
             )}
+            <Button variant="outline" onClick={handleRerender}>
+              <RotateCcw className="mr-2 h-4 w-4" /> {t("jobs.detail.rerender")}
+            </Button>
           </>
         )}
         {job.status === "FAILED" && (
           <>
             <Button onClick={handleRetry}>
               <RefreshCw className="mr-2 h-4 w-4" /> {t("jobs.detail.retry")}
+            </Button>
+            <Button variant="outline" onClick={handleRerender}>
+              <RotateCcw className="mr-2 h-4 w-4" /> {t("jobs.detail.rerender")}
             </Button>
             <Button variant="outline" onClick={handleTakeover}>
               <UserCheck className="mr-2 h-4 w-4" /> {t("jobs.detail.manualTakeover")}

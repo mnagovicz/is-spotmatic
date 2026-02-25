@@ -13,6 +13,9 @@ const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "5000");
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL_MS || "30000");
 const WORK_DIR = path.resolve(process.env.WORK_DIR || "./work");
 const AE_PATH = process.env.AE_PATH || "C:\\Program Files\\Adobe\\Adobe After Effects 2024\\Support Files\\afterfx.exe";
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
+const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
+const FFMPEG_PATH = process.env.FFMPEG_PATH || "ffmpeg";
 
 const s3Client = new S3Client({
   endpoint: process.env.S3_ENDPOINT,
@@ -39,7 +42,7 @@ async function main() {
   }
 
   const apiClient = new ApiClient(API_BASE_URL, AGENT_API_KEY);
-  const processor = new JobProcessor(apiClient, WORK_DIR, AE_PATH, s3Client, S3_BUCKET);
+  const processor = new JobProcessor(apiClient, WORK_DIR, AE_PATH, s3Client, S3_BUCKET, ELEVENLABS_API_KEY, ELEVENLABS_MODEL_ID, FFMPEG_PATH);
   const heartbeat = new HeartbeatManager(apiClient, HEARTBEAT_INTERVAL_MS);
 
   // Start heartbeat

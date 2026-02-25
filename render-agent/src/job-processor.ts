@@ -3,6 +3,8 @@ import * as path from "path";
 import { ApiClient, RenderJob } from "./api-client";
 import { buildJsx } from "./jsx-builder";
 import { runAfterEffects } from "./ae-runner";
+import { generateTts, TtsRequest } from "./tts-generator";
+import { mixAudio } from "./audio-mixer";
 import {
   S3Client,
   GetObjectCommand,
@@ -15,25 +17,35 @@ export class JobProcessor {
   private aePath: string;
   private s3: S3Client;
   private s3Bucket: string;
+  private elevenLabsApiKey: string;
+  private elevenLabsModelId: string;
+  private ffmpegPath: string;
 
   constructor(
     client: ApiClient,
     workDir: string,
     aePath: string,
     s3: S3Client,
-    s3Bucket: string
+    s3Bucket: string,
+    elevenLabsApiKey: string = "",
+    elevenLabsModelId: string = "eleven_multilingual_v2",
+    ffmpegPath: string = "ffmpeg"
   ) {
     this.client = client;
     this.workDir = workDir;
     this.aePath = aePath;
     this.s3 = s3;
     this.s3Bucket = s3Bucket;
+    this.elevenLabsApiKey = elevenLabsApiKey;
+    this.elevenLabsModelId = elevenLabsModelId;
+    this.ffmpegPath = ffmpegPath;
   }
 
   async process(job: RenderJob): Promise<void> {
     const jobDir = path.join(this.workDir, `job_${job.id}`);
     const footageDir = path.join(jobDir, "footage");
     const outputDir = path.join(jobDir, "output");
+    const voiceoverDir = path.join(jobDir, "voiceovers");
 
     try {
       // Create work directories
@@ -43,7 +55,7 @@ export class JobProcessor {
 
       console.log(`[Processor] Processing job ${job.id}`);
 
-      // ── Step 1: Download AEP and assets ──
+      // ── Step 1: Download AEP, assets, and background audio (5-20%) ──
       await this.client.updateStatus(job.id, "DOWNLOADING", 5);
 
       const aepLocalPath = path.join(jobDir, job.template.aepFileName || "template.aep");
@@ -65,9 +77,52 @@ export class JobProcessor {
         }
       }
 
+      // Download background audio if configured
+      let backgroundAudioPath: string | undefined;
+      if (job.template.backgroundAudioUrl) {
+        backgroundAudioPath = path.join(jobDir, job.template.backgroundAudioName || "background.wav");
+        await this.downloadFromS3(job.template.backgroundAudioUrl, backgroundAudioPath);
+        console.log(`[Processor] Downloaded background audio: ${backgroundAudioPath}`);
+      }
+
       await this.client.updateStatus(job.id, "DOWNLOADING", 20);
 
-      // ── Step 2: Build footage replacements ──
+      // ── Step 2: Generate TTS voiceovers (20-30%) ──
+      const voiceoverVariables = job.template.variables.filter(
+        (v) => v.type === "VOICEOVER" && v.validation?.voiceId
+      );
+
+      const ttsRequests: TtsRequest[] = [];
+      for (const v of voiceoverVariables) {
+        const jobDataEntry = job.jobData.find((d) => d.key === v.id);
+        const text = jobDataEntry?.value;
+        if (text && v.validation?.voiceId) {
+          ttsRequests.push({
+            variableId: v.id,
+            text,
+            voiceId: v.validation.voiceId,
+            startFrame: v.validation.startFrame ?? 0,
+          });
+        }
+      }
+
+      let ttsResults: { variableId: string; filePath: string; startFrame: number }[] = [];
+
+      if (ttsRequests.length > 0 && this.elevenLabsApiKey) {
+        await this.client.updateStatus(job.id, "GENERATING_TTS", 22);
+        ttsResults = await generateTts(
+          ttsRequests,
+          voiceoverDir,
+          this.elevenLabsApiKey,
+          this.elevenLabsModelId
+        );
+        console.log(`[Processor] Generated ${ttsResults.length} voiceover(s)`);
+        await this.client.updateStatus(job.id, "GENERATING_TTS", 30);
+      } else if (ttsRequests.length > 0 && !this.elevenLabsApiKey) {
+        console.warn("[Processor] VOICEOVER variables found but ELEVENLABS_API_KEY not set, skipping TTS");
+      }
+
+      // ── Step 3: Build footage replacements ──
       const footageReplacements: { originalName: string; newFilePath: string }[] = [];
 
       for (const asset of job.jobAssets) {
@@ -82,8 +137,8 @@ export class JobProcessor {
         }
       }
 
-      // ── Step 3: Generate JSX ──
-      await this.client.updateStatus(job.id, "RENDERING", 25);
+      // ── Step 4: Generate JSX and render in AE (30-80%) ──
+      await this.client.updateStatus(job.id, "RENDERING", 32);
 
       const outputAepPath = path.join(outputDir, "output.aep");
       const outputMp4Path = path.join(outputDir, "output.mp4");
@@ -100,8 +155,7 @@ export class JobProcessor {
       fs.writeFileSync(jsxPath, jsxCode, "utf-8");
       console.log(`[Processor] JSX written to ${jsxPath}`);
 
-      // ── Step 4: Run After Effects ──
-      await this.client.updateStatus(job.id, "RENDERING", 30);
+      await this.client.updateStatus(job.id, "RENDERING", 35);
 
       await runAfterEffects({
         aePath: this.aePath,
@@ -109,7 +163,7 @@ export class JobProcessor {
         outputMp4Path,
         timeoutMs: 600000, // 10 min
         onProgress: async (progress) => {
-          const mapped = 30 + Math.floor(progress * 0.5); // Map 0-100 to 30-80
+          const mapped = 35 + Math.floor(progress * 0.45); // Map 0-100 to 35-80
           try {
             await this.client.updateStatus(job.id, "RENDERING", mapped);
           } catch {
@@ -120,16 +174,47 @@ export class JobProcessor {
 
       console.log(`[Processor] Render complete for job ${job.id}`);
 
-      // ── Step 5: Upload results ──
-      await this.client.updateStatus(job.id, "UPLOADING", 85);
+      // ── Step 5: Mix audio with ffmpeg (80-90%) ──
+      const needsMixing = ttsResults.length > 0 || backgroundAudioPath;
+      let finalMp4Path = outputMp4Path;
+
+      if (needsMixing && fs.existsSync(outputMp4Path)) {
+        await this.client.updateStatus(job.id, "MIXING", 82);
+
+        const fps = job.template.fps || 25;
+        const voiceoverVolumeDb = job.voiceoverVolumeDb ?? job.template.voiceoverVolumeDb ?? 0;
+        const backgroundVolumeDb = job.backgroundVolumeDb ?? job.template.backgroundVolumeDb ?? -10;
+
+        finalMp4Path = path.join(outputDir, "output_final.mp4");
+
+        await mixAudio({
+          videoPath: outputMp4Path,
+          voiceovers: ttsResults.map((r) => ({
+            filePath: r.filePath,
+            startFrame: r.startFrame,
+          })),
+          backgroundAudioPath,
+          fps,
+          voiceoverVolumeDb,
+          backgroundVolumeDb,
+          outputPath: finalMp4Path,
+          ffmpegPath: this.ffmpegPath,
+        });
+
+        console.log(`[Processor] Audio mixing complete for job ${job.id}`);
+        await this.client.updateStatus(job.id, "MIXING", 90);
+      }
+
+      // ── Step 6: Upload results (90-100%) ──
+      await this.client.updateStatus(job.id, "UPLOADING", 91);
 
       let mp4Key: string | undefined;
       let aepKey: string | undefined;
 
-      if (fs.existsSync(outputMp4Path)) {
+      if (fs.existsSync(finalMp4Path)) {
         mp4Key = `outputs/${job.id}/output.mp4`;
-        await this.uploadToS3(outputMp4Path, mp4Key, "video/mp4");
-        await this.client.updateStatus(job.id, "UPLOADING", 92);
+        await this.uploadToS3(finalMp4Path, mp4Key, "video/mp4");
+        await this.client.updateStatus(job.id, "UPLOADING", 95);
       }
 
       if (fs.existsSync(outputAepPath)) {
@@ -138,7 +223,7 @@ export class JobProcessor {
         await this.client.updateStatus(job.id, "UPLOADING", 98);
       }
 
-      // ── Step 6: Submit result ──
+      // ── Step 7: Submit result ──
       await this.client.submitResult(job.id, mp4Key, aepKey);
       await this.client.updateStatus(job.id, "COMPLETED", 100);
 

@@ -26,7 +26,6 @@ import {
   Trash2,
   GripVertical,
   Send,
-  Upload,
   Music,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -543,6 +542,141 @@ export default function TemplateEditorPage() {
         </CardContent>
       </Card>
 
+      {/* Background Audio */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("templates.editor.backgroundAudio")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div>
+              <Label htmlFor="backgroundAudio">{t("templates.editor.uploadWav")}</Label>
+              <Input
+                id="backgroundAudio"
+                type="file"
+                accept=".wav"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const presignRes = await fetch("/api/files", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        fileName: file.name,
+                        contentType: file.type || "audio/wav",
+                        action: "upload",
+                      }),
+                    });
+                    const { url, key } = await presignRes.json();
+                    await fetch(url, {
+                      method: "PUT",
+                      body: file,
+                      headers: { "Content-Type": file.type || "audio/wav" },
+                    });
+                    await fetch(`/api/templates/${id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        backgroundAudioUrl: key,
+                        backgroundAudioName: file.name,
+                      }),
+                    });
+                    mutateTemplate();
+                    toast.success(t("toast.wavUploaded"));
+                  } catch {
+                    toast.error(t("toast.templateSaveFailed"));
+                  }
+                }}
+              />
+            </div>
+            {template.backgroundAudioName && (
+              <div className="flex items-center gap-2">
+                <Music className="h-4 w-4 text-muted-foreground" />
+                <Badge variant="outline">{template.backgroundAudioName}</Badge>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Audio Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("templates.editor.audioSettings")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>{t("templates.editor.fps")}</Label>
+              <Input
+                type="number"
+                min={1}
+                value={template.fps ?? 25}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (val > 0) {
+                    fetch(`/api/templates/${id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ fps: val }),
+                    }).then(() => mutateTemplate());
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("templates.editor.voiceoverVolume")}</Label>
+              <Input
+                type="number"
+                step={0.5}
+                value={template.voiceoverVolumeDb ?? 0}
+                onChange={(e) => {
+                  fetch(`/api/templates/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ voiceoverVolumeDb: parseFloat(e.target.value) || 0 }),
+                  }).then(() => mutateTemplate());
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("templates.editor.backgroundVolume")}</Label>
+              <Input
+                type="number"
+                step={0.5}
+                value={template.backgroundVolumeDb ?? -10}
+                onChange={(e) => {
+                  fetch(`/api/templates/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ backgroundVolumeDb: parseFloat(e.target.value) || 0 }),
+                  }).then(() => mutateTemplate());
+                }}
+              />
+            </div>
+            <div className="flex items-end pb-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="allowClientAudioEdit"
+                  checked={template.allowClientAudioEdit ?? false}
+                  onCheckedChange={(checked) => {
+                    fetch(`/api/templates/${id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ allowClientAudioEdit: !!checked }),
+                    }).then(() => mutateTemplate());
+                  }}
+                />
+                <Label htmlFor="allowClientAudioEdit" className="text-sm">
+                  {t("templates.editor.allowClientAudioEdit")}
+                </Label>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Analysis Results */}
       {analysis && (
         <Card>
@@ -884,53 +1018,19 @@ export default function TemplateEditorPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">{t("templates.editor.backgroundAudio")}</Label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".wav"
-                            className="h-9"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                const presignRes = await fetch("/api/files", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({
-                                    fileName: file.name,
-                                    contentType: file.type || "audio/wav",
-                                    action: "upload",
-                                  }),
-                                });
-                                const { url, key } = await presignRes.json();
-                                await fetch(url, {
-                                  method: "PUT",
-                                  body: file,
-                                  headers: { "Content-Type": file.type || "audio/wav" },
-                                });
-                                updateVariable(i, {
-                                  validation: {
-                                    ...((v.validation as Record<string, unknown>) || {}),
-                                    backgroundAudioUrl: key,
-                                    backgroundAudioName: file.name,
-                                  },
-                                });
-                                toast.success(t("toast.wavUploaded"));
-                              } catch {
-                                toast.error(t("toast.templateSaveFailed"));
-                              }
-                            }}
-                          />
-                        </div>
-                        {(v.validation as Record<string, string> | null)?.backgroundAudioName && (
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <Music className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {(v.validation as Record<string, string>).backgroundAudioName}
-                            </span>
-                          </div>
-                        )}
+                        <Label className="text-xs">{t("templates.editor.voiceId")}</Label>
+                        <Input
+                          value={(v.validation as Record<string, string> | null)?.voiceId ?? ""}
+                          onChange={(e) =>
+                            updateVariable(i, {
+                              validation: {
+                                ...((v.validation as Record<string, unknown>) || {}),
+                                voiceId: e.target.value || undefined,
+                              },
+                            })
+                          }
+                          placeholder="ElevenLabs Voice ID"
+                        />
                       </div>
                     </>
                   )}

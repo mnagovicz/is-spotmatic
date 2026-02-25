@@ -30,7 +30,9 @@ enum JobStatus {
   AWAITING_APPROVAL
   PENDING
   DOWNLOADING
+  GENERATING_TTS
   RENDERING
+  MIXING
   UPLOADING
   COMPLETED
   FAILED
@@ -99,8 +101,14 @@ model Template {
   exportCompName  String             @default("___Fotbal_Chance_export")
   controlCompName String?
   thumbnailUrl    String?
-  color           String?
-  isActive        Boolean            @default(true)
+  color                String?
+  backgroundAudioUrl   String?
+  backgroundAudioName  String?
+  fps                  Int                @default(25)
+  voiceoverVolumeDb    Float              @default(0)
+  backgroundVolumeDb   Float              @default(-10)
+  allowClientAudioEdit Boolean            @default(false)
+  isActive             Boolean            @default(true)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -172,7 +180,9 @@ model RenderJob {
   maxRetries     Int          @default(3)
   jobName        String?
   dueDate        DateTime?
-  broadcastDate  DateTime?
+  broadcastDate        DateTime?
+  voiceoverVolumeDb    Float?
+  backgroundVolumeDb   Float?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   startedAt      DateTime?
