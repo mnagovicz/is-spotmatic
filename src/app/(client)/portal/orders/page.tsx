@@ -64,7 +64,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   if (!job) return (
     <TableRow>
-      <TableCell colSpan={8} className="bg-muted/30 py-3 px-8">
+      <TableCell colSpan={9} className="bg-muted/30 py-3 px-8">
         {t("common.loading")}
       </TableCell>
     </TableRow>
@@ -101,7 +101,7 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   return (
     <TableRow>
-      <TableCell colSpan={8} className="bg-muted/30 p-0">
+      <TableCell colSpan={9} className="bg-muted/30 p-0">
         <div className="space-y-3 px-8 py-3">
           {visibleVars.length > 0 && Object.entries(rows)
             .sort(([a], [b]) => Number(a) - Number(b))
@@ -203,6 +203,7 @@ export default function PortalOrdersPage() {
                 <TableHead>{t("portal.orders.deliveryDestination")}</TableHead>
                 <TableHead>{t("portal.orders.dueDate")}</TableHead>
                 <TableHead>{t("portal.orders.status")}</TableHead>
+                <TableHead>{t("jobs.detail.completed")}</TableHead>
                 <TableHead>{t("portal.orders.created")}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -219,6 +220,7 @@ export default function PortalOrdersPage() {
                   jobName: string | null;
                   status: JobStatus;
                   createdAt: string;
+                  completedAt: string | null;
                   dueDate: string | null;
                   broadcastDate: string | null;
                   template: { name: string } | null;
@@ -257,6 +259,11 @@ export default function PortalOrdersPage() {
                         <JobStatusBadge status={job.status} />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
+                        {(job.status === "COMPLETED" || job.status === "REVIEW") && job.completedAt
+                          ? format(new Date(job.completedAt), "d.M.yyyy HH:mm")
+                          : ""}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
                         {formatDistanceToNow(new Date(job.createdAt), {
                           addSuffix: true,
                         })}
@@ -290,7 +297,7 @@ export default function PortalOrdersPage() {
               {(!data?.jobs || data.jobs.length === 0) && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center text-muted-foreground"
                   >
                     {t("portal.orders.noOrders")}

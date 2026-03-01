@@ -25,7 +25,7 @@ import { DynamicForm } from "@/components/dynamic-form/dynamic-form";
 import { Progress } from "@/components/ui/progress";
 import { Plus, ChevronDown, Download, CheckCircle, XCircle, Wrench, Edit3 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -65,7 +65,7 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
 
   if (!job) return (
     <TableRow>
-      <TableCell colSpan={7} className="bg-muted/30 py-3 px-8">
+      <TableCell colSpan={8} className="bg-muted/30 py-3 px-8">
         {t("common.loading")}
       </TableCell>
     </TableRow>
@@ -126,7 +126,7 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
 
   return (
     <TableRow>
-      <TableCell colSpan={7} className="bg-muted/30 p-0">
+      <TableCell colSpan={8} className="bg-muted/30 p-0">
         <div className="space-y-3 px-8 py-3">
           {visibleVars.length > 0 && (
             <div className="flex flex-wrap gap-6">
@@ -253,6 +253,7 @@ export default function JobsPage() {
                 <TableHead>{t("jobs.template")}</TableHead>
                 <TableHead>{t("jobs.createdBy")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
+                <TableHead>{t("jobs.detail.completed")}</TableHead>
                 <TableHead>{t("jobs.progress")}</TableHead>
                 <TableHead>{t("jobs.agent")}</TableHead>
                 <TableHead>{t("jobs.created")}</TableHead>
@@ -266,6 +267,7 @@ export default function JobsPage() {
                   status: "AWAITING_APPROVAL" | "PENDING" | "DOWNLOADING" | "RENDERING" | "UPLOADING" | "REVIEW" | "COMPLETED" | "FAILED" | "REJECTED" | "MANUAL";
                   progress: number;
                   createdAt: string;
+                  completedAt: string | null;
                   template: { name: string };
                   createdBy: { name: string | null; email: string };
                   agent: { name: string } | null;
@@ -296,6 +298,11 @@ export default function JobsPage() {
                       <TableCell>
                         <JobStatusBadge status={job.status} />
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {(job.status === "COMPLETED" || job.status === "REVIEW") && job.completedAt
+                          ? format(new Date(job.completedAt), "d.M.yyyy HH:mm")
+                          : ""}
+                      </TableCell>
                       <TableCell>
                         {["DOWNLOADING", "RENDERING", "UPLOADING"].includes(
                           job.status
@@ -324,7 +331,7 @@ export default function JobsPage() {
               )}
               {(!data?.jobs || data.jobs.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     {t("jobs.noJobs")}
                   </TableCell>
                 </TableRow>
