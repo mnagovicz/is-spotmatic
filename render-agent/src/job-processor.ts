@@ -5,6 +5,7 @@ import { buildJsx } from "./jsx-builder";
 import { runAfterEffects } from "./ae-runner";
 import { generateTts, TtsRequest } from "./tts-generator";
 import { mixAudio } from "./audio-mixer";
+import { execSync } from "child_process";
 import {
   S3Client,
   GetObjectCommand,
@@ -20,6 +21,7 @@ export class JobProcessor {
   private elevenLabsApiKey: string;
   private elevenLabsModelId: string;
   private ffmpegPath: string;
+  private mockAe: boolean;
 
   constructor(
     client: ApiClient,
@@ -29,7 +31,8 @@ export class JobProcessor {
     s3Bucket: string,
     elevenLabsApiKey: string = "",
     elevenLabsModelId: string = "eleven_multilingual_v2",
-    ffmpegPath: string = "ffmpeg"
+    ffmpegPath: string = "ffmpeg",
+    mockAe: boolean = false
   ) {
     this.client = client;
     this.workDir = workDir;
@@ -39,6 +42,7 @@ export class JobProcessor {
     this.elevenLabsApiKey = elevenLabsApiKey;
     this.elevenLabsModelId = elevenLabsModelId;
     this.ffmpegPath = ffmpegPath;
+    this.mockAe = mockAe;
   }
 
   async process(job: RenderJob): Promise<void> {
@@ -157,20 +161,30 @@ export class JobProcessor {
 
       await this.client.updateStatus(job.id, "RENDERING", 35);
 
-      await runAfterEffects({
-        aePath: this.aePath,
-        jsxFilePath: jsxPath,
-        outputMp4Path,
-        timeoutMs: 600000, // 10 min
-        onProgress: async (progress) => {
-          const mapped = 35 + Math.floor(progress * 0.45); // Map 0-100 to 35-80
-          try {
-            await this.client.updateStatus(job.id, "RENDERING", mapped);
-          } catch {
-            // Ignore progress update errors
-          }
-        },
-      });
+      if (this.mockAe) {
+        // Mock AE: generate a 5s test video with ffmpeg (no drawtext - may not be available)
+        console.log(`[Processor] MOCK_AE: generating test video with ffmpeg`);
+        execSync(
+          `${this.ffmpegPath} -y -f lavfi -i color=c=0x222222:s=1920x1080:d=5:r=25 -c:v libx264 -pix_fmt yuv420p "${outputMp4Path}"`,
+          { stdio: "pipe" }
+        );
+        console.log(`[Processor] MOCK_AE: test video created`);
+      } else {
+        await runAfterEffects({
+          aePath: this.aePath,
+          jsxFilePath: jsxPath,
+          outputMp4Path,
+          timeoutMs: 600000, // 10 min
+          onProgress: async (progress) => {
+            const mapped = 35 + Math.floor(progress * 0.45); // Map 0-100 to 35-80
+            try {
+              await this.client.updateStatus(job.id, "RENDERING", mapped);
+            } catch {
+              // Ignore progress update errors
+            }
+          },
+        });
+      }
 
       console.log(`[Processor] Render complete for job ${job.id}`);
 

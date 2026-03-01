@@ -27,7 +27,7 @@ export default function CreateJobPage() {
     setLoading(true);
     try {
       // Upload files first
-      const fileUploads: Record<string, string> = {};
+      const assets: { slotId: string; fileName: string; originalName: string; fileUrl: string; fileSize: number; mimeType: string }[] = [];
       for (const [slotId, file] of Object.entries(files)) {
         const presignRes = await fetch("/api/files", {
           method: "POST",
@@ -46,7 +46,14 @@ export default function CreateJobPage() {
           headers: { "Content-Type": file.type },
         });
 
-        fileUploads[slotId] = key;
+        assets.push({
+          slotId,
+          fileName: file.name,
+          originalName: file.name,
+          fileUrl: key,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        });
       }
 
       // Create job
@@ -57,7 +64,8 @@ export default function CreateJobPage() {
           templateId,
           organizationId: template.organizationId,
           jobName: jobName || undefined,
-          data: { ...data, ...fileUploads },
+          data,
+          assets,
         }),
       });
 

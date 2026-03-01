@@ -21,13 +21,13 @@ export async function GET(req: NextRequest) {
   const job = await prisma.$queryRaw<Array<{id: string}>>`
     UPDATE render_jobs
     SET status = 'DOWNLOADING',
-        agent_id = ${agent.id},
-        started_at = NOW(),
-        updated_at = NOW()
+        "agentId" = ${agent.id},
+        "startedAt" = NOW(),
+        "updatedAt" = NOW()
     WHERE id = (
       SELECT id FROM render_jobs
       WHERE status = 'PENDING'
-      ORDER BY priority DESC, created_at ASC
+      ORDER BY priority DESC, "createdAt" ASC
       LIMIT 1
       FOR UPDATE SKIP LOCKED
     )

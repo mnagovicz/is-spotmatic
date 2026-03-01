@@ -17,9 +17,11 @@ import {
   Server,
   AlertTriangle,
   RotateCcw,
+  Play,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
+import { useEffect, useState } from "react";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -34,6 +36,20 @@ export default function JobDetailPage() {
     },
   });
   const { t } = useTranslation();
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (job?.status === "COMPLETED" && job?.outputMp4Url && !videoUrl) {
+      fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: job.outputMp4Url, action: "download" }),
+      })
+        .then((r) => r.json())
+        .then((data) => setVideoUrl(data.url))
+        .catch(() => {});
+    }
+  }, [job?.status, job?.outputMp4Url]);
 
   async function handleTakeover() {
     const res = await fetch(`/api/jobs/${id}/takeover`, { method: "POST" });
@@ -81,17 +97,20 @@ export default function JobDetailPage() {
     }
   }
 
-  async function handleDownload(url: string, filename: string) {
+  async function handleDownload(fileKey: string, filename: string) {
     const res = await fetch("/api/files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileName: url, action: "download" }),
+      body: JSON.stringify({ fileName: fileKey, action: "download" }),
     });
     const { url: downloadUrl } = await res.json();
+    const blob = await fetch(downloadUrl).then((r) => r.blob());
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = downloadUrl;
+    a.href = blobUrl;
     a.download = filename;
     a.click();
+    URL.revokeObjectURL(blobUrl);
   }
 
   if (!job) {
@@ -139,6 +158,20 @@ export default function JobDetailPage() {
                 Retry {job.retryCount}/{job.maxRetries}
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Video Preview */}
+      {job.status === "COMPLETED" && videoUrl && (
+        <Card>
+          <CardContent className="p-4">
+            <video
+              src={videoUrl}
+              controls
+              className="w-full rounded-lg"
+              preload="metadata"
+            />
           </CardContent>
         </Card>
       )}

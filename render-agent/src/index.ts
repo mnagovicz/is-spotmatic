@@ -16,6 +16,7 @@ const AE_PATH = process.env.AE_PATH || "C:\\Program Files\\Adobe\\Adobe After Ef
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 const FFMPEG_PATH = process.env.FFMPEG_PATH || "ffmpeg";
+const MOCK_AE = process.env.MOCK_AE === "true";
 
 const s3Client = new S3Client({
   endpoint: process.env.S3_ENDPOINT,
@@ -35,6 +36,7 @@ async function main() {
   console.log(`Poll interval: ${POLL_INTERVAL_MS}ms`);
   console.log(`Work dir: ${WORK_DIR}`);
   console.log(`AE path: ${AE_PATH}`);
+  console.log(`Mock AE: ${MOCK_AE}`);
 
   if (!AGENT_API_KEY) {
     console.error("ERROR: AGENT_API_KEY is required");
@@ -42,7 +44,7 @@ async function main() {
   }
 
   const apiClient = new ApiClient(API_BASE_URL, AGENT_API_KEY);
-  const processor = new JobProcessor(apiClient, WORK_DIR, AE_PATH, s3Client, S3_BUCKET, ELEVENLABS_API_KEY, ELEVENLABS_MODEL_ID, FFMPEG_PATH);
+  const processor = new JobProcessor(apiClient, WORK_DIR, AE_PATH, s3Client, S3_BUCKET, ELEVENLABS_API_KEY, ELEVENLABS_MODEL_ID, FFMPEG_PATH, MOCK_AE);
   const heartbeat = new HeartbeatManager(apiClient, HEARTBEAT_INTERVAL_MS);
 
   // Start heartbeat

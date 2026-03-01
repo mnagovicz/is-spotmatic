@@ -77,7 +77,8 @@ export class ApiClient {
     this.apiKey = apiKey;
   }
 
-  private async request(path: string, options: RequestInit = {}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async request(path: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${path}`;
     const res = await fetch(url, {
       ...options,

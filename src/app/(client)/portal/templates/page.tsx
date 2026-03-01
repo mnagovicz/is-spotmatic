@@ -43,6 +43,8 @@ export default function PortalTemplatesPage() {
   const [broadcastDate, setBroadcastDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [deliveryDestinationId, setDeliveryDestinationId] = useState("");
+  const [voiceoverVolumeDb, setVoiceoverVolumeDb] = useState<number | undefined>();
+  const [backgroundVolumeDb, setBackgroundVolumeDb] = useState<number | undefined>();
   const draftRef = useRef(false);
 
   const templates: Template[] = data?.templates || data || [];
@@ -69,6 +71,8 @@ export default function PortalTemplatesPage() {
     setDueDate("");
     setBroadcastDate("");
     setDeliveryDestinationId("");
+    setVoiceoverVolumeDb(undefined);
+    setBackgroundVolumeDb(undefined);
   }
 
   async function handleSubmit(
@@ -79,7 +83,7 @@ export default function PortalTemplatesPage() {
     const isDraft = draftRef.current;
     setLoading(true);
     try {
-      const fileUploads: Record<string, string> = {};
+      const assets: { slotId: string; fileName: string; originalName: string; fileUrl: string; fileSize: number; mimeType: string }[] = [];
       for (const [slotId, file] of Object.entries(files)) {
         const presignRes = await fetch("/api/files", {
           method: "POST",
@@ -98,7 +102,14 @@ export default function PortalTemplatesPage() {
           headers: { "Content-Type": file.type },
         });
 
-        fileUploads[slotId] = key;
+        assets.push({
+          slotId,
+          fileName: file.name,
+          originalName: file.name,
+          fileUrl: key,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        });
       }
 
       const res = await fetch("/api/jobs", {
@@ -110,9 +121,12 @@ export default function PortalTemplatesPage() {
           jobName: jobName || undefined,
           dueDate: dueDate || undefined,
           broadcastDate: broadcastDate || undefined,
-          data: { ...formData, ...fileUploads },
+          data: formData,
+          assets,
           draft: isDraft,
           deliveryDestinationId: deliveryDestinationId || undefined,
+          voiceoverVolumeDb,
+          backgroundVolumeDb,
         }),
       });
 
@@ -242,6 +256,10 @@ export default function PortalTemplatesPage() {
             clientMode
             hideSubmitButton
             formId="order-form"
+            allowAudioEdit={fullTemplate.allowClientAudioEdit}
+            voiceoverVolumeDb={voiceoverVolumeDb ?? fullTemplate.voiceoverVolumeDb ?? 0}
+            backgroundVolumeDb={backgroundVolumeDb ?? fullTemplate.backgroundVolumeDb ?? -10}
+            onVolumeChange={(vo, bg) => { setVoiceoverVolumeDb(vo); setBackgroundVolumeDb(bg); }}
           />
 
           <div className="flex gap-3">

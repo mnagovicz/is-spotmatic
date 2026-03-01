@@ -41,8 +41,8 @@ export default async function DashboardPage() {
         jobName: job.jobName,
         status: job.status,
         createdAt: job.createdAt.toISOString(),
-        templateName: job.template.name,
-        createdByName: job.createdBy.name,
+        templateName: job.template?.name ?? "-",
+        createdByName: job.createdBy?.name ?? "-",
       }))}
     />
   );

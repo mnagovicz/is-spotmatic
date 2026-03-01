@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import Link from "next/link";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, ChevronDown } from "lucide-react";
+import { Plus, ChevronDown, Download } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 
@@ -44,6 +44,20 @@ interface JobData {
 function ExpandedRow({ jobId }: { jobId: string }) {
   const { data: job } = useSWR(`/api/jobs/${jobId}`, fetcher);
   const { t } = useTranslation();
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (job?.status === "COMPLETED" && job?.outputMp4Url && !videoUrl) {
+      fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: job.outputMp4Url, action: "download" }),
+      })
+        .then((r) => r.json())
+        .then((data) => setVideoUrl(data.url))
+        .catch(() => {});
+    }
+  }, [job?.status, job?.outputMp4Url]);
 
   if (!job) return (
     <TableRow>
@@ -58,21 +72,57 @@ function ExpandedRow({ jobId }: { jobId: string }) {
 
   const visibleVars = variables.filter((v) => v.clientVisible);
 
-  if (visibleVars.length === 0) return null;
+  async function handleDownload(fileKey: string, filename: string) {
+    const res = await fetch("/api/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: fileKey, action: "download" }),
+    });
+    const { url: downloadUrl } = await res.json();
+    const blob = await fetch(downloadUrl).then((r) => r.blob());
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  }
 
   return (
     <TableRow>
       <TableCell colSpan={7} className="bg-muted/30 p-0">
-        <div className="flex flex-wrap gap-6 px-8 py-3">
-          {visibleVars.map((v) => {
-            const data = jobData.find((d) => d.key === v.id);
-            return (
-              <div key={v.id} className="text-sm">
-                <span className="text-muted-foreground">{v.clientLabel || v.label}: </span>
-                <span className="font-medium">{data?.value || "—"}</span>
-              </div>
-            );
-          })}
+        <div className="space-y-3 px-8 py-3">
+          {visibleVars.length > 0 && (
+            <div className="flex flex-wrap gap-6">
+              {visibleVars.map((v) => {
+                const data = jobData.find((d) => d.key === v.id);
+                return (
+                  <div key={v.id} className="text-sm">
+                    <span className="text-muted-foreground">{v.clientLabel || v.label}: </span>
+                    <span className="font-medium">{data?.value || "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {job.status === "COMPLETED" && videoUrl && (
+            <div className="max-w-2xl">
+              <video src={videoUrl} controls className="w-full rounded-lg" preload="metadata" />
+            </div>
+          )}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+            {job.status === "COMPLETED" && job.outputMp4Url && (
+              <Button size="sm" onClick={() => handleDownload(job.outputMp4Url, `${job.jobName || job.id}.mp4`)}>
+                <Download className="mr-2 h-3 w-3" /> {t("jobs.detail.downloadMp4")}
+              </Button>
+            )}
+            <Link href={`/jobs/${jobId}`}>
+              <Button size="sm" variant="outline">
+                {t("jobs.detail.jobInfo")}
+              </Button>
+            </Link>
+          </div>
         </div>
       </TableCell>
     </TableRow>
@@ -153,9 +203,8 @@ export default function JobsPage() {
                   createdBy: { name: string | null; email: string };
                   agent: { name: string } | null;
                 }) => (
-                  <>
+                  <React.Fragment key={job.id}>
                     <TableRow
-                      key={job.id}
                       className="cursor-pointer"
                       onClick={() =>
                         setExpandedId(expandedId === job.id ? null : job.id)
@@ -203,7 +252,7 @@ export default function JobsPage() {
                     {expandedId === job.id && (
                       <ExpandedRow key={`${job.id}-detail`} jobId={job.id} />
                     )}
-                  </>
+                  </React.Fragment>
                 )
               )}
               {(!data?.jobs || data.jobs.length === 0) && (

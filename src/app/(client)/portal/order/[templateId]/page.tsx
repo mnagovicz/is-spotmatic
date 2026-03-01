@@ -50,7 +50,7 @@ export default function PortalOrderPage() {
     const isDraft = draftRef.current;
     setLoading(true);
     try {
-      const fileUploads: Record<string, string> = {};
+      const assets: { slotId: string; fileName: string; originalName: string; fileUrl: string; fileSize: number; mimeType: string }[] = [];
       for (const [slotId, file] of Object.entries(files)) {
         const presignRes = await fetch("/api/files", {
           method: "POST",
@@ -69,7 +69,14 @@ export default function PortalOrderPage() {
           headers: { "Content-Type": file.type },
         });
 
-        fileUploads[slotId] = key;
+        assets.push({
+          slotId,
+          fileName: file.name,
+          originalName: file.name,
+          fileUrl: key,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        });
       }
 
       const res = await fetch("/api/jobs", {
@@ -81,7 +88,8 @@ export default function PortalOrderPage() {
           jobName: jobName || undefined,
           dueDate: dueDate || undefined,
           broadcastDate: broadcastDate || undefined,
-          data: { ...data, ...fileUploads },
+          data,
+          assets,
           draft: isDraft,
           deliveryDestinationId: deliveryDestinationId || undefined,
           voiceoverVolumeDb,

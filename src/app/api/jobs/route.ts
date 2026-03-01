@@ -3,6 +3,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+const assetSchema = z.object({
+  slotId: z.string().min(1),
+  fileName: z.string().min(1),
+  originalName: z.string().min(1),
+  fileUrl: z.string().min(1),
+  fileSize: z.number(),
+  mimeType: z.string(),
+});
+
 const createJobSchema = z.object({
   templateId: z.string().min(1),
   organizationId: z.string().min(1),
@@ -11,6 +20,7 @@ const createJobSchema = z.object({
   broadcastDate: z.string().optional(),
   priority: z.number().default(0),
   data: z.record(z.string(), z.string()),
+  assets: z.array(assetSchema).default([]),
   draft: z.boolean().default(false),
   deliveryDestinationId: z.string().optional(),
   voiceoverVolumeDb: z.number().optional(),
@@ -73,7 +83,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { templateId, organizationId, jobName, dueDate, broadcastDate, priority, data, draft, deliveryDestinationId, voiceoverVolumeDb, backgroundVolumeDb } = parsed.data;
+  const { templateId, organizationId, jobName, dueDate, broadcastDate, priority, data, assets, draft, deliveryDestinationId, voiceoverVolumeDb, backgroundVolumeDb } = parsed.data;
+
+  // Load footage slots to map assets to AE footage items
+  const footageSlots = await prisma.footageSlot.findMany({
+    where: { templateId },
+    select: { id: true, footageItemName: true, folderPath: true },
+  });
+
+  // Filter out slot IDs from data so they don't get stored as JobData
+  const slotIds = new Set(assets.map((a) => a.slotId));
+  const cleanData = Object.entries(data).filter(([key]) => !slotIds.has(key));
+
+  // Pre-build asset records with footage slot metadata
+  const assetRecords = assets.map((a) => {
+    const slot = footageSlots.find((s: { id: string; footageItemName: string | null; folderPath: string | null }) => s.id === a.slotId);
+    return {
+      footageSlotId: a.slotId,
+      fileName: a.fileName,
+      originalName: a.originalName,
+      fileUrl: a.fileUrl,
+      fileSize: a.fileSize,
+      mimeType: a.mimeType,
+      footageItemName: slot?.footageItemName ?? null,
+      folderPath: slot?.folderPath ?? null,
+    };
+  });
 
   const status = draft ? "DRAFT" : (session.user.role === "CLIENT" ? "AWAITING_APPROVAL" : "PENDING");
 
@@ -91,15 +126,19 @@ export async function POST(req: NextRequest) {
       voiceoverVolumeDb,
       backgroundVolumeDb,
       jobData: {
-        create: Object.entries(data).map(([key, value]) => ({
+        create: cleanData.map(([key, value]) => ({
           key,
           value: String(value),
         })),
+      },
+      jobAssets: {
+        create: assetRecords,
       },
     },
     include: {
       template: true,
       jobData: true,
+      jobAssets: true,
     },
   });
 
