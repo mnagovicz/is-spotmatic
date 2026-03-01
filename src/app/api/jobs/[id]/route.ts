@@ -88,12 +88,15 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (existingJob.createdById !== session.user.id) {
+  const isAdmin = session.user.role === "ADMIN" || session.user.role === "OPERATOR";
+
+  if (existingJob.createdById !== session.user.id && !isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const isReviewEdit = isAdmin && existingJob.status === "REVIEW";
 
-  if (existingJob.status !== "DRAFT") {
-    return NextResponse.json({ error: "Only DRAFT jobs can be edited" }, { status: 400 });
+  if (existingJob.status !== "DRAFT" && !isReviewEdit) {
+    return NextResponse.json({ error: "Only DRAFT or REVIEW jobs can be edited" }, { status: 400 });
   }
 
   const body = await req.json();
@@ -125,7 +128,8 @@ export async function PUT(
         ...(deliveryDestinationId !== undefined && { deliveryDestinationId }),
         ...(voiceoverVolumeDb !== undefined && { voiceoverVolumeDb }),
         ...(backgroundVolumeDb !== undefined && { backgroundVolumeDb }),
-        ...(submit && { status: "AWAITING_APPROVAL" }),
+        ...(submit && !isReviewEdit && { status: "AWAITING_APPROVAL" }),
+        ...(submit && isReviewEdit && { status: "PENDING", progress: 0, agentId: null, errorMessage: null, startedAt: null, completedAt: null }),
       },
       include: {
         template: true,

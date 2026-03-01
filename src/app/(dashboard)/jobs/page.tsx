@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, ChevronDown, Download } from "lucide-react";
+import { Plus, ChevronDown, Download, CheckCircle, XCircle, Wrench, Edit3 } from "lucide-react";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 
@@ -41,13 +42,14 @@ interface JobData {
   value: string;
 }
 
-function ExpandedRow({ jobId }: { jobId: string }) {
-  const { data: job } = useSWR(`/api/jobs/${jobId}`, fetcher);
+function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void }) {
+  const { data: job, mutate: mutateJob } = useSWR(`/api/jobs/${jobId}`, fetcher);
   const { t } = useTranslation();
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+  const [actionLoading, setActionLoading] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (job?.status === "COMPLETED" && job?.outputMp4Url && !videoUrl) {
+    if ((job?.status === "COMPLETED" || job?.status === "REVIEW") && job?.outputMp4Url && !videoUrl) {
       fetch("/api/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,6 +90,22 @@ function ExpandedRow({ jobId }: { jobId: string }) {
     URL.revokeObjectURL(blobUrl);
   }
 
+  async function handleReviewAction(action: string, body: Record<string, unknown>) {
+    setActionLoading(action);
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      const toastKey = action === "approve" ? "toast.jobApproved" : action === "reject" ? "toast.jobRejected" : "toast.jobToManual";
+      toast.success(t(toastKey));
+      mutateJob();
+      onMutate?.();
+    }
+  }
+
   return (
     <TableRow>
       <TableCell colSpan={7} className="bg-muted/30 p-0">
@@ -105,15 +123,28 @@ function ExpandedRow({ jobId }: { jobId: string }) {
               })}
             </div>
           )}
-          {job.status === "COMPLETED" && videoUrl && (
+          {(job.status === "COMPLETED" || job.status === "REVIEW") && videoUrl && (
             <div className="max-w-2xl">
               <video src={videoUrl} controls className="w-full rounded-lg" preload="metadata" />
             </div>
           )}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-            {job.status === "COMPLETED" && job.outputMp4Url && (
-              <Button size="sm" onClick={() => handleDownload(job.outputMp4Url, `${job.jobName || job.id}.mp4`)}>
+            {job.status === "REVIEW" && (
+              <>
+                <Button size="sm" onClick={() => handleReviewAction("approve", { status: "COMPLETED" })} disabled={!!actionLoading}>
+                  <CheckCircle className="mr-2 h-3 w-3" /> {t("jobs.detail.approve")}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => handleReviewAction("manual", { status: "MANUAL" })} disabled={!!actionLoading}>
+                  <Wrench className="mr-2 h-3 w-3" /> {t("jobs.detail.toManual")}
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => handleReviewAction("reject", { status: "REJECTED" })} disabled={!!actionLoading}>
+                  <XCircle className="mr-2 h-3 w-3" /> {t("jobs.detail.reject")}
+                </Button>
+              </>
+            )}
+            {(job.status === "COMPLETED" || job.status === "REVIEW") && job.outputMp4Url && (
+              <Button size="sm" variant="outline" onClick={() => handleDownload(job.outputMp4Url, `${job.jobName || job.id}.mp4`)}>
                 <Download className="mr-2 h-3 w-3" /> {t("jobs.detail.downloadMp4")}
               </Button>
             )}
@@ -133,7 +164,7 @@ export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const queryParams = statusFilter !== "all" ? `?status=${statusFilter}` : "";
-  const { data } = useSWR(`/api/jobs${queryParams}`, fetcher, {
+  const { data, mutate } = useSWR(`/api/jobs${queryParams}`, fetcher, {
     refreshInterval: 5000,
   });
   const { t } = useTranslation();
@@ -164,6 +195,7 @@ export default function JobsPage() {
             <SelectItem value="DOWNLOADING">{t("status.downloading")}</SelectItem>
             <SelectItem value="RENDERING">{t("status.rendering")}</SelectItem>
             <SelectItem value="UPLOADING">{t("status.uploading")}</SelectItem>
+            <SelectItem value="REVIEW">{t("status.review")}</SelectItem>
             <SelectItem value="COMPLETED">{t("status.completed")}</SelectItem>
             <SelectItem value="FAILED">{t("status.failed")}</SelectItem>
             <SelectItem value="REJECTED">{t("status.rejected")}</SelectItem>
@@ -196,7 +228,7 @@ export default function JobsPage() {
                 (job: {
                   id: string;
                   jobName: string | null;
-                  status: "AWAITING_APPROVAL" | "PENDING" | "DOWNLOADING" | "RENDERING" | "UPLOADING" | "COMPLETED" | "FAILED" | "REJECTED" | "MANUAL";
+                  status: "AWAITING_APPROVAL" | "PENDING" | "DOWNLOADING" | "RENDERING" | "UPLOADING" | "REVIEW" | "COMPLETED" | "FAILED" | "REJECTED" | "MANUAL";
                   progress: number;
                   createdAt: string;
                   template: { name: string };
@@ -250,7 +282,7 @@ export default function JobsPage() {
                       </TableCell>
                     </TableRow>
                     {expandedId === job.id && (
-                      <ExpandedRow key={`${job.id}-detail`} jobId={job.id} />
+                      <ExpandedRow key={`${job.id}-detail`} jobId={job.id} onMutate={() => mutate()} />
                     )}
                   </React.Fragment>
                 )

@@ -13,6 +13,7 @@ const statusConfig: Record<JobStatus, { key: string; variant: "default" | "secon
   RENDERING: { key: "status.rendering", variant: "default" },
   MIXING: { key: "status.mixing", variant: "default" },
   UPLOADING: { key: "status.uploading", variant: "outline" },
+  REVIEW: { key: "status.review", variant: "outline" },
   COMPLETED: { key: "status.completed", variant: "default" },
   FAILED: { key: "status.failed", variant: "destructive" },
   REJECTED: { key: "status.rejected", variant: "destructive" },
@@ -36,6 +37,8 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
           ? "bg-cyan-100 text-cyan-800 hover:bg-cyan-100 dark:bg-cyan-900/30 dark:text-cyan-400 dark:hover:bg-cyan-900/30"
           : status === "DOWNLOADING" || status === "UPLOADING"
           ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30"
+          : status === "REVIEW"
+          ? "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/30"
           : status === "AWAITING_APPROVAL"
           ? "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/30"
           : status === "DRAFT"

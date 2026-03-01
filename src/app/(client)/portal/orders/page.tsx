@@ -22,9 +22,10 @@ import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 import { JobStatus } from "@/generated/prisma/client";
-import { ChevronDown, Pencil, Trash2 } from "lucide-react";
-import { Fragment } from "react";
+import { ChevronDown, Download, Pencil, Trash2 } from "lucide-react";
+import React, { Fragment } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -46,6 +47,20 @@ interface JobData {
 function ExpandedRow({ jobId }: { jobId: string }) {
   const { data: job } = useSWR(`/api/jobs/${jobId}`, fetcher);
   const { t } = useTranslation();
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (job?.status === "COMPLETED" && job?.outputMp4Url && !videoUrl) {
+      fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: job.outputMp4Url, action: "download" }),
+      })
+        .then((r) => r.json())
+        .then((data) => setVideoUrl(data.url))
+        .catch(() => {});
+    }
+  }, [job?.status, job?.outputMp4Url]);
 
   if (!job) return (
     <TableRow>
@@ -61,8 +76,6 @@ function ExpandedRow({ jobId }: { jobId: string }) {
   // Only show client-visible variables
   const visibleVars = variables.filter((v) => v.clientVisible);
 
-  if (visibleVars.length === 0) return null;
-
   const rows = visibleVars.reduce((acc, v) => {
     const r = v.row ?? 0;
     if (!acc[r]) acc[r] = [];
@@ -70,11 +83,27 @@ function ExpandedRow({ jobId }: { jobId: string }) {
     return acc;
   }, {} as Record<number, TemplateVariable[]>);
 
+  async function handleDownload(fileKey: string, filename: string) {
+    const res = await fetch("/api/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: fileKey, action: "download" }),
+    });
+    const { url: downloadUrl } = await res.json();
+    const blob = await fetch(downloadUrl).then((r) => r.blob());
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  }
+
   return (
     <TableRow>
       <TableCell colSpan={8} className="bg-muted/30 p-0">
-        <div className="space-y-1 px-8 py-3">
-          {Object.entries(rows)
+        <div className="space-y-3 px-8 py-3">
+          {visibleVars.length > 0 && Object.entries(rows)
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([rowNum, vars]) => (
               <div key={rowNum} className="flex flex-wrap gap-6">
@@ -89,6 +118,25 @@ function ExpandedRow({ jobId }: { jobId: string }) {
                 })}
               </div>
             ))}
+          {job.status === "COMPLETED" && videoUrl && (
+            <div className="max-w-2xl">
+              <video src={videoUrl} controls className="w-full rounded-lg" preload="metadata" />
+            </div>
+          )}
+          {job.status === "REJECTED" && job.rejectionReason && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-900/20">
+              <span className="font-medium text-red-800 dark:text-red-400">{t("portal.orders.detail.rejectionReason")}: </span>
+              <span className="text-red-700 dark:text-red-300">{job.rejectionReason}</span>
+            </div>
+          )}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+            {job.status === "COMPLETED" && job.outputMp4Url && (
+              <Button size="sm" onClick={() => handleDownload(job.outputMp4Url, `${job.jobName || job.id}.mp4`)}>
+                <Download className="mr-2 h-3 w-3" /> {t("portal.orders.detail.downloadVideo")}
+              </Button>
+            )}
+          </div>
         </div>
       </TableCell>
     </TableRow>
@@ -131,6 +179,7 @@ export default function PortalOrdersPage() {
             <SelectItem value="AWAITING_APPROVAL">{t("status.awaitingApproval")}</SelectItem>
             <SelectItem value="PENDING">{t("status.pending")}</SelectItem>
             <SelectItem value="RENDERING">{t("status.rendering")}</SelectItem>
+            <SelectItem value="REVIEW">{t("status.review")}</SelectItem>
             <SelectItem value="COMPLETED">{t("status.completed")}</SelectItem>
             <SelectItem value="REJECTED">{t("status.rejected")}</SelectItem>
             <SelectItem value="FAILED">{t("status.failed")}</SelectItem>

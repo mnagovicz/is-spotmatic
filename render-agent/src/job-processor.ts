@@ -239,7 +239,7 @@ export class JobProcessor {
 
       // ── Step 7: Submit result ──
       await this.client.submitResult(job.id, mp4Key, aepKey);
-      await this.client.updateStatus(job.id, "COMPLETED", 100);
+      await this.client.updateStatus(job.id, "REVIEW", 100);
 
       console.log(`[Processor] Job ${job.id} completed successfully`);
     } catch (err) {

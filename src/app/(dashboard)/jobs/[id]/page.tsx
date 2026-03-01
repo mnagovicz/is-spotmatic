@@ -8,6 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { DynamicForm } from "@/components/dynamic-form/dynamic-form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Download,
@@ -18,6 +29,10 @@ import {
   AlertTriangle,
   RotateCcw,
   Play,
+  CheckCircle,
+  XCircle,
+  Wrench,
+  Edit3,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
@@ -30,16 +45,20 @@ export default function JobDetailPage() {
   const { data: job, mutate } = useSWR(`/api/jobs/${id}`, fetcher, {
     refreshInterval: (data) => {
       if (!data) return 5000;
-      if (["COMPLETED", "FAILED", "MANUAL"].includes(data.status)) return 0;
+      if (["COMPLETED", "FAILED", "MANUAL", "REVIEW", "REJECTED"].includes(data.status)) return 0;
       if (["RENDERING", "GENERATING_TTS", "MIXING"].includes(data.status)) return 2000;
       return 5000;
     },
   });
   const { t } = useTranslation();
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRerenderForm, setShowRerenderForm] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    if (job?.status === "COMPLETED" && job?.outputMp4Url && !videoUrl) {
+    if ((job?.status === "COMPLETED" || job?.status === "REVIEW") && job?.outputMp4Url && !videoUrl) {
       fetch("/api/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,6 +132,66 @@ export default function JobDetailPage() {
     URL.revokeObjectURL(blobUrl);
   }
 
+  async function handleApprove() {
+    setActionLoading("approve");
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "COMPLETED" }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      toast.success(t("toast.jobApproved"));
+      mutate();
+    }
+  }
+
+  async function handleReject() {
+    setActionLoading("reject");
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "REJECTED", rejectionReason: rejectReason }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      toast.success(t("toast.jobRejected"));
+      setShowRejectDialog(false);
+      setRejectReason("");
+      mutate();
+    }
+  }
+
+  async function handleToManual() {
+    setActionLoading("manual");
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "MANUAL" }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      toast.success(t("toast.jobToManual"));
+      mutate();
+    }
+  }
+
+  async function handleRerenderWithData(data: Record<string, string>) {
+    setActionLoading("rerender");
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data, submit: true }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      toast.success(t("toast.jobRequeued"));
+      setShowRerenderForm(false);
+      setVideoUrl(null);
+      mutate();
+    }
+  }
+
   if (!job) {
     return <div>{t("common.loading")}</div>;
   }
@@ -163,7 +242,7 @@ export default function JobDetailPage() {
       )}
 
       {/* Video Preview */}
-      {job.status === "COMPLETED" && videoUrl && (
+      {(job.status === "COMPLETED" || job.status === "REVIEW") && videoUrl && (
         <Card>
           <CardContent className="p-4">
             <video
@@ -175,6 +254,75 @@ export default function JobDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Review Actions */}
+      {job.status === "REVIEW" && (
+        <Card className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20">
+          <CardContent className="py-4">
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={handleApprove} disabled={!!actionLoading}>
+                <CheckCircle className="mr-2 h-4 w-4" /> {t("jobs.detail.approve")}
+              </Button>
+              <Button variant="outline" onClick={() => setShowRerenderForm(!showRerenderForm)} disabled={!!actionLoading}>
+                <Edit3 className="mr-2 h-4 w-4" /> {t("jobs.detail.rerenderWithEdit")}
+              </Button>
+              <Button variant="outline" onClick={handleToManual} disabled={!!actionLoading}>
+                <Wrench className="mr-2 h-4 w-4" /> {t("jobs.detail.toManual")}
+              </Button>
+              <Button variant="destructive" onClick={() => setShowRejectDialog(true)} disabled={!!actionLoading}>
+                <XCircle className="mr-2 h-4 w-4" /> {t("jobs.detail.reject")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Re-render with edit form */}
+      {showRerenderForm && job.status === "REVIEW" && job.template && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{t("jobs.detail.rerenderWithEdit")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DynamicForm
+              variables={job.template.variables || []}
+              footageSlots={job.template.footageSlots || []}
+              defaultValues={Object.fromEntries(
+                (job.jobData || []).map((d: { key: string; value: string }) => [d.key, d.value])
+              )}
+              onSubmit={(data) => handleRerenderWithData(data)}
+              loading={actionLoading === "rerender"}
+              submitLabel={t("jobs.detail.confirmRerender")}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Reject Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("jobs.detail.reject")}</DialogTitle>
+            <DialogDescription>{t("approvals.rejectDialog.description")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>{t("jobs.detail.rejectReason")}</Label>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder={t("approvals.rejectDialog.reasonPlaceholder")}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleReject} disabled={actionLoading === "reject"}>
+              {t("jobs.detail.reject")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Actions */}
       <div className="flex gap-3">
@@ -198,6 +346,26 @@ export default function JobDetailPage() {
             <Button variant="outline" onClick={handleRerender}>
               <RotateCcw className="mr-2 h-4 w-4" /> {t("jobs.detail.rerender")}
             </Button>
+          </>
+        )}
+        {(job.status === "REVIEW") && (
+          <>
+            {job.outputMp4Url && (
+              <Button
+                variant="outline"
+                onClick={() => handleDownload(job.outputMp4Url, "output.mp4")}
+              >
+                <Download className="mr-2 h-4 w-4" /> {t("jobs.detail.downloadMp4")}
+              </Button>
+            )}
+            {job.outputAepUrl && (
+              <Button
+                variant="outline"
+                onClick={() => handleDownload(job.outputAepUrl, "output.aep")}
+              >
+                <Download className="mr-2 h-4 w-4" /> {t("jobs.detail.downloadAep")}
+              </Button>
+            )}
           </>
         )}
         {job.status === "FAILED" && (

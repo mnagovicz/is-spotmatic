@@ -4,7 +4,7 @@ import { z } from "zod";
 
 const statusSchema = z.object({
   jobId: z.string(),
-  status: z.enum(["DOWNLOADING", "GENERATING_TTS", "RENDERING", "MIXING", "UPLOADING", "COMPLETED", "FAILED"]),
+  status: z.enum(["DOWNLOADING", "GENERATING_TTS", "RENDERING", "MIXING", "UPLOADING", "REVIEW", "COMPLETED", "FAILED"]),
   progress: z.number().min(0).max(100).optional(),
   errorMessage: z.string().optional(),
 });
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest) {
 
   if (progress !== undefined) updateData.progress = progress;
   if (errorMessage) updateData.errorMessage = errorMessage;
-  if (status === "COMPLETED") {
+  if (status === "COMPLETED" || status === "REVIEW") {
     updateData.completedAt = new Date();
     updateData.progress = 100;
   }
@@ -48,8 +48,8 @@ export async function PATCH(req: NextRequest) {
     data: updateData,
   });
 
-  // Update agent status if job completed/failed
-  if (status === "COMPLETED" || status === "FAILED") {
+  // Update agent status if job completed/failed/review
+  if (status === "COMPLETED" || status === "FAILED" || status === "REVIEW") {
     await prisma.renderAgent.update({
       where: { id: agent.id },
       data: { status: "online", currentJobId: null },
