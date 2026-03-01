@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -166,9 +166,8 @@ export default function ApprovalsPage() {
                   template: { name: string };
                   createdBy: { name: string | null; email: string };
                 }) => (
-                  <>
+                  <React.Fragment key={job.id}>
                     <TableRow
-                      key={job.id}
                       className="cursor-pointer"
                       onClick={() =>
                         setExpandedId(expandedId === job.id ? null : job.id)
@@ -225,7 +224,7 @@ export default function ApprovalsPage() {
                     {expandedId === job.id && (
                       <ExpandedRow key={`${job.id}-detail`} jobId={job.id} />
                     )}
-                  </>
+                  </React.Fragment>
                 )
               )}
               {(!data?.jobs || data.jobs.length === 0) && (

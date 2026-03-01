@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { DynamicForm } from "@/components/dynamic-form/dynamic-form";
 import { Progress } from "@/components/ui/progress";
 import { Plus, ChevronDown, Download, CheckCircle, XCircle, Wrench, Edit3 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
   const { t } = useTranslation();
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+  const [showRerenderForm, setShowRerenderForm] = React.useState(false);
 
   React.useEffect(() => {
     if ((job?.status === "COMPLETED" || job?.status === "REVIEW") && job?.outputMp4Url && !videoUrl) {
@@ -106,6 +108,22 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
     }
   }
 
+  async function handleRerenderWithData(data: Record<string, string>) {
+    setActionLoading("rerender");
+    const res = await fetch(`/api/jobs/${jobId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data, submit: true }),
+    });
+    setActionLoading(null);
+    if (res.ok) {
+      toast.success(t("toast.jobRequeued"));
+      setShowRerenderForm(false);
+      mutateJob();
+      onMutate?.();
+    }
+  }
+
   return (
     <TableRow>
       <TableCell colSpan={7} className="bg-muted/30 p-0">
@@ -135,6 +153,9 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
                 <Button size="sm" onClick={() => handleReviewAction("approve", { status: "COMPLETED" })} disabled={!!actionLoading}>
                   <CheckCircle className="mr-2 h-3 w-3" /> {t("jobs.detail.approve")}
                 </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowRerenderForm(!showRerenderForm)} disabled={!!actionLoading}>
+                  <Edit3 className="mr-2 h-3 w-3" /> {t("jobs.detail.rerenderWithEdit")}
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => handleReviewAction("manual", { status: "MANUAL" })} disabled={!!actionLoading}>
                   <Wrench className="mr-2 h-3 w-3" /> {t("jobs.detail.toManual")}
                 </Button>
@@ -154,6 +175,20 @@ function ExpandedRow({ jobId, onMutate }: { jobId: string; onMutate?: () => void
               </Button>
             </Link>
           </div>
+          {showRerenderForm && job.status === "REVIEW" && job.template && (
+            <div className="border-t pt-3">
+              <DynamicForm
+                variables={job.template.variables || []}
+                footageSlots={job.template.footageSlots || []}
+                defaultValues={Object.fromEntries(
+                  (job.jobData || []).map((d: { key: string; value: string }) => [d.key, d.value])
+                )}
+                onSubmit={(data) => handleRerenderWithData(data)}
+                loading={actionLoading === "rerender"}
+                submitLabel={t("jobs.detail.confirmRerender")}
+              />
+            </div>
+          )}
         </div>
       </TableCell>
     </TableRow>
