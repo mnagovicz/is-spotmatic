@@ -34,6 +34,7 @@ export const authConfig: NextAuthConfig = {
         pathname.startsWith("/login") ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/agent") ||
+        pathname.startsWith("/api/debug") ||
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico"
       ) {
