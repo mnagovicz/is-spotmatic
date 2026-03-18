@@ -22,9 +22,10 @@ import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { useTranslation } from "@/lib/i18n";
 import { JobStatus } from "@/generated/prisma/client";
-import { ChevronDown, Download, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Download, Pencil, Trash2 } from "lucide-react";
 import React, { Fragment } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -151,6 +152,7 @@ export default function PortalOrdersPage() {
     refreshInterval: 5000,
   });
   const { t } = useTranslation();
+  const router = useRouter();
 
   async function handleDelete(jobId: string) {
     if (!confirm(t("portal.order.deleteConfirm"))) return;
@@ -223,7 +225,8 @@ export default function PortalOrdersPage() {
                   completedAt: string | null;
                   dueDate: string | null;
                   broadcastDate: string | null;
-                  template: { name: string } | null;
+                  templateId: string | null;
+                  template: { id: string; name: string } | null;
                   deliveryDestination: { name: string } | null;
                 }) => (
                   <Fragment key={job.id}>
@@ -277,6 +280,18 @@ export default function PortalOrdersPage() {
                             >
                               <Pencil className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                             </Link>
+                          )}
+                          {(job.templateId || job.template?.id) && (
+                            <button
+                              title={t("orders.duplicateTooltip")}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const tid = job.templateId || job.template?.id;
+                                router.push(`/portal/order/${tid}?duplicate=${job.id}`);
+                              }}
+                            >
+                              <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                            </button>
                           )}
                           {(job.status === "DRAFT" || job.status === "AWAITING_APPROVAL") && (
                             <button

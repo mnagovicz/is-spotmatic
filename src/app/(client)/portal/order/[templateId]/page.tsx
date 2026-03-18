@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { DynamicForm } from "@/components/dynamic-form/dynamic-form";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
 import { Save, Send } from "lucide-react";
 
@@ -37,6 +37,42 @@ export default function PortalOrderPage() {
   const [backgroundVolumeDb, setBackgroundVolumeDb] = useState<number | undefined>();
   const { t } = useTranslation();
   const draftRef = useRef(false);
+  const searchParams = useSearchParams();
+  const duplicateJobId = searchParams.get("duplicate");
+  const [defaultValues, setDefaultValues] = useState<Record<string, string> | undefined>(undefined);
+  const [duplicateLoaded, setDuplicateLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!duplicateJobId || duplicateLoaded) return;
+    fetch(`/api/jobs/${duplicateJobId}`)
+      .then((r) => r.json())
+      .then((job) => {
+        if (!job || job.error) return;
+        // Prefill job name with copy indicator
+        if (job.jobName) setJobName(`${job.jobName} (kopie)`);
+        // Prefill dates
+        if (job.dueDate) setDueDate(job.dueDate.slice(0, 16));
+        if (job.broadcastDate) setBroadcastDate(job.broadcastDate.slice(0, 16));
+        // Prefill delivery destination
+        if (job.deliveryDestinationId) {
+
+          setDeliveryDestinationId(job.deliveryDestinationId);
+        }
+        // Prefill form fields
+        if (job.jobData) {
+          const vals: Record<string, string> = {};
+          for (const d of job.jobData) {
+            vals[d.key] = d.value;
+          }
+          setDefaultValues(vals);
+        }
+        // Prefill volumes
+        if (job.voiceoverVolumeDb !== undefined && job.voiceoverVolumeDb !== null) setVoiceoverVolumeDb(job.voiceoverVolumeDb);
+        if (job.backgroundVolumeDb !== undefined && job.backgroundVolumeDb !== null) setBackgroundVolumeDb(job.backgroundVolumeDb);
+        setDuplicateLoaded(true);
+      })
+      .catch(() => {});
+  }, [duplicateJobId, duplicateLoaded]);
 
   const clientDeliveries = (templateDeliveries || []).filter(
     (td: { clientVisible: boolean; deliveryDestination: { isActive: boolean } }) =>
@@ -170,6 +206,7 @@ export default function PortalOrderPage() {
         </div>
       )}
 
+      {(!duplicateJobId || duplicateLoaded) && (
       <DynamicForm
         variables={template.variables || []}
         footageSlots={template.footageSlots || []}
@@ -182,7 +219,9 @@ export default function PortalOrderPage() {
         voiceoverVolumeDb={voiceoverVolumeDb ?? template.voiceoverVolumeDb ?? 0}
         backgroundVolumeDb={backgroundVolumeDb ?? template.backgroundVolumeDb ?? -10}
         onVolumeChange={(vo, bg) => { setVoiceoverVolumeDb(vo); setBackgroundVolumeDb(bg); }}
+        defaultValues={defaultValues}
       />
+      )}
 
       <div className="flex gap-3">
         <Button

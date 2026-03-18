@@ -407,5 +407,7 @@
   "toast.userDeleted": "User deleted successfully",
   "toast.userDeleteFailed": "Failed to delete user",
   "toast.userUpdated": "User updated successfully",
-  "toast.userUpdateFailed": "Failed to update user"
+  "toast.userUpdateFailed": "Failed to update user",
+  "orders.duplicate": "Duplicate",
+  "orders.duplicateTooltip": "Create a new order with the same data"
 }

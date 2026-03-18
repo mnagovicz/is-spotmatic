@@ -407,5 +407,7 @@
   "toast.userDeleted": "Uživatel byl smazán",
   "toast.userDeleteFailed": "Nepodařilo se smazat uživatele",
   "toast.userUpdated": "Uživatel byl aktualizován",
-  "toast.userUpdateFailed": "Nepodařilo se aktualizovat uživatele"
+  "toast.userUpdateFailed": "Nepodařilo se aktualizovat uživatele",
+  "orders.duplicate": "Duplikovat",
+  "orders.duplicateTooltip": "Vytvořit novou objednávku se stejnými daty"
 }

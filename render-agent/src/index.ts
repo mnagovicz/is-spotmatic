@@ -18,14 +18,15 @@ const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multiling
 const FFMPEG_PATH = process.env.FFMPEG_PATH || "ffmpeg";
 const MOCK_AE = process.env.MOCK_AE === "true";
 
+const isCustomEndpoint = !!process.env.S3_ENDPOINT;
 const s3Client = new S3Client({
-  endpoint: process.env.S3_ENDPOINT,
+  ...(isCustomEndpoint ? { endpoint: process.env.S3_ENDPOINT } : {}),
   region: process.env.S3_REGION || "us-east-1",
   credentials: {
     accessKeyId: process.env.S3_ACCESS_KEY || "",
     secretAccessKey: process.env.S3_SECRET_KEY || "",
   },
-  forcePathStyle: true,
+  forcePathStyle: isCustomEndpoint,
 });
 
 const S3_BUCKET = process.env.S3_BUCKET || "ae-render";
