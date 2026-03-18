@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AE Render Automat",
+  title: "IS AE Render Automat",
   description: "Automated After Effects rendering pipeline",
 };
 
