@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -184,9 +184,9 @@ function ChangeRoleDialog({
   const [loading, setLoading] = useState(false);
 
   // Sync role when user changes
-  if (user && role !== user.role && !loading) {
-    setRole(user.role);
-  }
+  useEffect(() => {
+    if (user) setRole(user.role);
+  }, [user]);
 
   async function handleSave() {
     if (!user) return;
