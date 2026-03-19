@@ -222,7 +222,7 @@ function AddUserDialog({
   );
 }
 
-function ChangeRoleDialog({
+function EditUserDialog({
   user,
   open,
   onOpenChange,
@@ -235,11 +235,24 @@ function ChangeRoleDialog({
 }) {
   const { t } = useTranslation();
   const [role, setRole] = useState<"ADMIN" | "OPERATOR" | "CLIENT">("CLIENT");
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const { data: orgsData } = useSWR<Organization[]>(open ? "/api/organizations" : null, fetcher);
+  const organizations: Organization[] = orgsData || [];
+
   useEffect(() => {
-    if (user) setRole(user.role);
+    if (user) {
+      setRole(user.role);
+      setSelectedOrgIds(user.memberships.map((m) => m.organization.id));
+    }
   }, [user]);
+
+  function toggleOrg(orgId: string) {
+    setSelectedOrgIds((prev) =>
+      prev.includes(orgId) ? prev.filter((id) => id !== orgId) : [...prev, orgId]
+    );
+  }
 
   async function handleSave() {
     if (!user) return;
@@ -247,7 +260,7 @@ function ChangeRoleDialog({
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, organizationIds: selectedOrgIds }),
     });
     setLoading(false);
     if (res.ok) {
@@ -261,13 +274,13 @@ function ChangeRoleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("users.roleDialog.title")}</DialogTitle>
+          <DialogTitle>{t("users.editDialog.title") || "Upravit uživatele"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>{t("users.roleDialog.selectRole")}</Label>
+            <Label>{t("users.roleDialog.selectRole") || "Role"}</Label>
             <Select
               value={role}
               onValueChange={(v) => setRole(v as "ADMIN" | "OPERATOR" | "CLIENT")}
@@ -282,12 +295,41 @@ function ChangeRoleDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {organizations.length > 0 && (
+            <div className="space-y-2">
+              <Label>{t("users.dialog.organizations") || "Organizace"}</Label>
+              <div className="rounded-md border p-3 space-y-2 max-h-48 overflow-y-auto">
+                {organizations.map((org) => (
+                  <div key={org.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`edit-org-${org.id}`}
+                      checked={selectedOrgIds.includes(org.id)}
+                      onCheckedChange={() => toggleOrg(org.id)}
+                    />
+                    <label
+                      htmlFor={`edit-org-${org.id}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {org.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {selectedOrgIds.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t("users.dialog.noOrgSelected") || "Žádná organizace — bude přiřazeno do výchozí."}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
             <Button onClick={handleSave} disabled={loading}>
-              {loading ? t("users.roleDialog.saving") : t("users.roleDialog.save")}
+              {loading ? (t("users.roleDialog.saving") || "Ukládám…") : (t("users.editDialog.save") || "Uložit")}
             </Button>
           </div>
         </div>
@@ -300,7 +342,7 @@ export default function UsersPage() {
   const { t } = useTranslation();
   const { data: users, mutate } = useSWR<UserRecord[]>("/api/users", fetcher);
   const [addOpen, setAddOpen] = useState(false);
-  const [roleUser, setRoleUser] = useState<UserRecord | null>(null);
+  const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [deleteUser, setDeleteUser] = useState<UserRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -362,10 +404,10 @@ export default function UsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => { setRoleUser(user); }}
+                        onClick={() => setEditUser(user)}
                       >
                         <UserCog className="mr-1 h-3 w-3" />
-                        {t("users.changeRole")}
+                        {t("users.editUser") || "Upravit"}
                       </Button>
                       <Button
                         size="sm"
@@ -397,10 +439,10 @@ export default function UsersPage() {
         onCreated={() => mutate()}
       />
 
-      <ChangeRoleDialog
-        user={roleUser}
-        open={!!roleUser}
-        onOpenChange={(v) => { if (!v) setRoleUser(null); }}
+      <EditUserDialog
+        user={editUser}
+        open={!!editUser}
+        onOpenChange={(v) => { if (!v) setEditUser(null); }}
         onUpdated={() => mutate()}
       />
 
