@@ -55,6 +55,7 @@ async function main() {
   let isProcessing = false;
 
   async function poll() {
+    process.stdout.write(".");
     if (isProcessing) return;
 
     try {

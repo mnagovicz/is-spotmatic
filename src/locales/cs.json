@@ -409,5 +409,14 @@
   "toast.userUpdated": "Uživatel byl aktualizován",
   "toast.userUpdateFailed": "Nepodařilo se aktualizovat uživatele",
   "orders.duplicate": "Duplikovat",
-  "orders.duplicateTooltip": "Vytvořit novou objednávku se stejnými daty"
+  "orders.duplicateTooltip": "Vytvořit novou objednávku se stejnými daty",
+  "users.dialog.newPassword": "Nové heslo",
+  "users.dialog.newPasswordPlaceholder": "Ponechte prázdné pro zachování",
+  "users.dialog.confirmPassword": "Potvrzení hesla",
+  "users.dialog.passwordMismatch": "Hesla se neshodují",
+  "users.editUser": "Upravit",
+  "users.editDialog.title": "Upravit uživatele",
+  "users.editDialog.save": "Uložit",
+  "users.dialog.organizations": "Organizace",
+  "users.dialog.noOrgSelected": "Žádná organizace — bude přiřazeno do výchozí."
 }

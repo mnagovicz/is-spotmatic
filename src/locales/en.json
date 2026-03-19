@@ -409,5 +409,14 @@
   "toast.userUpdated": "User updated successfully",
   "toast.userUpdateFailed": "Failed to update user",
   "orders.duplicate": "Duplicate",
-  "orders.duplicateTooltip": "Create a new order with the same data"
+  "orders.duplicateTooltip": "Create a new order with the same data",
+  "users.dialog.newPassword": "New Password",
+  "users.dialog.newPasswordPlaceholder": "Leave blank to keep unchanged",
+  "users.dialog.confirmPassword": "Confirm Password",
+  "users.dialog.passwordMismatch": "Passwords do not match",
+  "users.editUser": "Edit",
+  "users.editDialog.title": "Edit User",
+  "users.editDialog.save": "Save",
+  "users.dialog.organizations": "Organizations",
+  "users.dialog.noOrgSelected": "No organization — will be assigned to default."
 }

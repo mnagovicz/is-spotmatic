@@ -234,6 +234,10 @@ function EditUserDialog({
   onUpdated: () => void;
 }) {
   const { t } = useTranslation();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"ADMIN" | "OPERATOR" | "CLIENT">("CLIENT");
   const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -243,6 +247,10 @@ function EditUserDialog({
 
   useEffect(() => {
     if (user) {
+      setName(user.name || "");
+      setEmail(user.email);
+      setPassword("");
+      setConfirmPassword("");
       setRole(user.role);
       setSelectedOrgIds(user.memberships.map((m) => m.organization.id));
     }
@@ -256,11 +264,17 @@ function EditUserDialog({
 
   async function handleSave() {
     if (!user) return;
+    if (password && password !== confirmPassword) {
+      toast.error(t("users.dialog.passwordMismatch"));
+      return;
+    }
     setLoading(true);
+    const payload: Record<string, unknown> = { name, email, role, organizationIds: selectedOrgIds };
+    if (password) payload.password = password;
     const res = await fetch(`/api/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, organizationIds: selectedOrgIds }),
+      body: JSON.stringify(payload),
     });
     setLoading(false);
     if (res.ok) {
@@ -268,7 +282,8 @@ function EditUserDialog({
       onUpdated();
       onOpenChange(false);
     } else {
-      toast.error(t("toast.userUpdateFailed"));
+      const data = await res.json();
+      toast.error(data.error || t("toast.userUpdateFailed"));
     }
   }
 
@@ -276,11 +291,56 @@ function EditUserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("users.editDialog.title") || "Upravit uživatele"}</DialogTitle>
+          <DialogTitle>{t("users.editDialog.title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>{t("users.roleDialog.selectRole") || "Role"}</Label>
+            <Label htmlFor="edit-name">{t("users.dialog.name")}</Label>
+            <Input
+              id="edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("users.dialog.namePlaceholder")}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-email">{t("users.dialog.email")}</Label>
+            <Input
+              id="edit-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t("users.dialog.emailPlaceholder")}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-password">{t("users.dialog.newPassword")}</Label>
+            <Input
+              id="edit-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("users.dialog.newPasswordPlaceholder")}
+            />
+          </div>
+          {password && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-confirm-password">{t("users.dialog.confirmPassword")}</Label>
+              <Input
+                id="edit-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder={t("users.dialog.confirmPassword")}
+              />
+              {confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-destructive">{t("users.dialog.passwordMismatch")}</p>
+              )}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label>{t("users.dialog.role")}</Label>
             <Select
               value={role}
               onValueChange={(v) => setRole(v as "ADMIN" | "OPERATOR" | "CLIENT")}
@@ -298,7 +358,7 @@ function EditUserDialog({
 
           {organizations.length > 0 && (
             <div className="space-y-2">
-              <Label>{t("users.dialog.organizations") || "Organizace"}</Label>
+              <Label>{t("users.dialog.organizations")}</Label>
               <div className="rounded-md border p-3 space-y-2 max-h-48 overflow-y-auto">
                 {organizations.map((org) => (
                   <div key={org.id} className="flex items-center gap-2">
@@ -318,7 +378,7 @@ function EditUserDialog({
               </div>
               {selectedOrgIds.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {t("users.dialog.noOrgSelected") || "Žádná organizace — bude přiřazeno do výchozí."}
+                  {t("users.dialog.noOrgSelected")}
                 </p>
               )}
             </div>
@@ -329,7 +389,7 @@ function EditUserDialog({
               {t("common.cancel")}
             </Button>
             <Button onClick={handleSave} disabled={loading}>
-              {loading ? (t("users.roleDialog.saving") || "Ukládám…") : (t("users.editDialog.save") || "Uložit")}
+              {loading ? t("users.roleDialog.saving") : t("users.editDialog.save")}
             </Button>
           </div>
         </div>
