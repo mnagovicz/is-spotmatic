@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const parsed = patchUserSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
 
-  const { organizationIds, password, email, ...userFields } = parsed.data;
+  const { organizationIds, password, email, name, role } = parsed.data;
 
   // Check email uniqueness if email is being changed
   if (email !== undefined) {
@@ -32,19 +32,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (existingUser && existingUser.id !== id) {
       return NextResponse.json({ error: "Email already in use by another user" }, { status: 409 });
     }
-    (userFields as Record<string, unknown>).email = email;
   }
 
-  // Hash password if provided
+  // Build update data object
+  const updateData: {
+    name?: string;
+    email?: string;
+    role?: "ADMIN" | "OPERATOR" | "CLIENT";
+    passwordHash?: string;
+  } = {};
+  if (name !== undefined) updateData.name = name;
+  if (email !== undefined) updateData.email = email;
+  if (role !== undefined) updateData.role = role;
   if (password) {
-    const passwordHash = await bcrypt.hash(password, 10);
-    (userFields as Record<string, unknown>).passwordHash = passwordHash;
+    updateData.passwordHash = await bcrypt.hash(password, 10);
   }
 
   // Update user fields
   const user = await prisma.user.update({
     where: { id },
-    data: userFields as Parameters<typeof prisma.user.update>[0]["data"],
+    data: updateData,
     select: {
       id: true,
       email: true,
