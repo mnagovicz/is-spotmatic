@@ -42,7 +42,13 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
 
   if (session.user.role === "CLIENT") {
-    where.createdById = session.user.id;
+    // Filter by organizations the client belongs to
+    const memberships = await prisma.organizationMember.findMany({
+      where: { userId: session.user.id },
+      select: { organizationId: true },
+    });
+    const orgIds = memberships.map((m: { organizationId: string }) => m.organizationId);
+    where.organizationId = { in: orgIds };
   }
 
   if (status) where.status = status;

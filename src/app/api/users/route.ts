@@ -9,6 +9,7 @@ const createUserSchema = z.object({
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["ADMIN", "OPERATOR", "CLIENT"]),
+  organizationIds: z.array(z.string()).optional(),
 });
 
 export async function GET() {
@@ -25,7 +26,9 @@ export async function GET() {
       role: true,
       createdAt: true,
       memberships: {
-        select: { organization: { select: { name: true, slug: true } } },
+        select: {
+          organization: { select: { id: true, name: true, slug: true } },
+        },
       },
     },
   });
@@ -44,24 +47,47 @@ export async function POST(request: NextRequest) {
   const parsed = createUserSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
 
-  const { name, email, password, role } = parsed.data;
+  const { name, email, password, role, organizationIds } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 409 });
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  let defaultOrg = await prisma.organization.findUnique({ where: { slug: "default" } });
-  if (!defaultOrg) {
-    defaultOrg = await prisma.organization.create({ data: { name: "Default", slug: "default" } });
+  // Determine which organizations to assign
+  let membershipOrgIds: string[] = [];
+
+  if (role === "CLIENT" && organizationIds && organizationIds.length > 0) {
+    // Assign to selected organizations
+    membershipOrgIds = organizationIds;
+  } else {
+    // Assign to default organization for ADMIN/OPERATOR or CLIENT without orgs
+    let defaultOrg = await prisma.organization.findUnique({ where: { slug: "default" } });
+    if (!defaultOrg) {
+      defaultOrg = await prisma.organization.create({ data: { name: "Default", slug: "default" } });
+    }
+    membershipOrgIds = [defaultOrg.id];
   }
 
   const user = await prisma.user.create({
     data: {
       name, email, passwordHash, role,
-      memberships: { create: { organizationId: defaultOrg.id } },
+      memberships: {
+        create: membershipOrgIds.map((orgId) => ({ organizationId: orgId })),
+      },
     },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      createdAt: true,
+      memberships: {
+        select: {
+          organization: { select: { id: true, name: true, slug: true } },
+        },
+      },
+    },
   });
 
   return NextResponse.json(user, { status: 201 });

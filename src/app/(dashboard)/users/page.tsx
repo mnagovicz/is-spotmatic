@@ -38,6 +38,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -45,13 +46,19 @@ import { useTranslation } from "@/lib/i18n";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface UserRecord {
   id: string;
   email: string;
   name: string | null;
   role: "ADMIN" | "OPERATOR" | "CLIENT";
   createdAt: string;
-  memberships: { organization: { name: string; slug: string } }[];
+  memberships: { organization: { id: string; name: string; slug: string } }[];
 }
 
 const roleBadgeVariant: Record<string, "default" | "secondary" | "outline"> = {
@@ -77,14 +84,28 @@ function AddUserDialog({
     password: "",
     role: "CLIENT" as "ADMIN" | "OPERATOR" | "CLIENT",
   });
+  const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([]);
+
+  const { data: orgsData } = useSWR<Organization[]>("/api/organizations", fetcher);
+  const organizations: Organization[] = orgsData || [];
+
+  function toggleOrg(orgId: string) {
+    setSelectedOrgIds((prev) =>
+      prev.includes(orgId) ? prev.filter((id) => id !== orgId) : [...prev, orgId]
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    const payload: Record<string, unknown> = { ...form };
+    if (form.role === "CLIENT" && selectedOrgIds.length > 0) {
+      payload.organizationIds = selectedOrgIds;
+    }
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     setLoading(false);
     if (res.ok) {
@@ -92,6 +113,7 @@ function AddUserDialog({
       onCreated();
       onOpenChange(false);
       setForm({ name: "", email: "", password: "", role: "CLIENT" });
+      setSelectedOrgIds([]);
     } else {
       const data = await res.json();
       toast.error(data.error || t("toast.userCreateFailed"));
@@ -142,7 +164,10 @@ function AddUserDialog({
             <Label htmlFor="role">{t("users.dialog.role")}</Label>
             <Select
               value={form.role}
-              onValueChange={(v) => setForm({ ...form, role: v as "ADMIN" | "OPERATOR" | "CLIENT" })}
+              onValueChange={(v) => {
+                setForm({ ...form, role: v as "ADMIN" | "OPERATOR" | "CLIENT" });
+                setSelectedOrgIds([]);
+              }}
             >
               <SelectTrigger id="role">
                 <SelectValue placeholder={t("users.dialog.selectRole")} />
@@ -154,6 +179,35 @@ function AddUserDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {form.role === "CLIENT" && organizations.length > 0 && (
+            <div className="space-y-2">
+              <Label>{t("users.dialog.organizations") || "Organizations"}</Label>
+              <div className="rounded-md border p-3 space-y-2 max-h-48 overflow-y-auto">
+                {organizations.map((org) => (
+                  <div key={org.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`org-${org.id}`}
+                      checked={selectedOrgIds.includes(org.id)}
+                      onCheckedChange={() => toggleOrg(org.id)}
+                    />
+                    <label
+                      htmlFor={`org-${org.id}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {org.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {selectedOrgIds.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t("users.dialog.noOrgSelected") || "No organization selected — will be assigned to default."}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
@@ -183,7 +237,6 @@ function ChangeRoleDialog({
   const [role, setRole] = useState<"ADMIN" | "OPERATOR" | "CLIENT">("CLIENT");
   const [loading, setLoading] = useState(false);
 
-  // Sync role when user changes
   useEffect(() => {
     if (user) setRole(user.role);
   }, [user]);
