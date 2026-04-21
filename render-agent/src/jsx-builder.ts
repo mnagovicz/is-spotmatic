@@ -132,6 +132,10 @@ export function generateJsx(input: JsxGeneratorInput): string {
   lines.push("app.beginSuppressDialogs();");
   lines.push("");
 
+  // Declare outputFile before try block so it's accessible in cleanup
+  lines.push(`var outputFile = new File("${escapeJsString(normalizePath(outputMp4Path))}");`);
+  lines.push("");
+
   // Wrap everything in a try-catch for error reporting
   lines.push("var _success = false;");
   lines.push("var _errorMsg = '';");
@@ -425,10 +429,7 @@ export function generateJsx(input: JsxGeneratorInput): string {
   lines.push("");
 
   // Set output file path
-  lines.push("  // Set output file");
-  lines.push(
-    `  var outputFile = new File("${escapeJsString(normalizePath(outputMp4Path))}");`
-  );
+  lines.push("  // Set output file (outputFile declared above try block)");
   lines.push("  outputModule.file = outputFile;");
   lines.push(
     '  $.writeln("Output file set to: " + outputFile.fsName);'
