@@ -402,11 +402,23 @@ export function generateJsx(input: JsxGeneratorInput): string {
   lines.push("  }");
   lines.push("");
   lines.push("  if (!templateApplied) {");
-  lines.push('    $.writeln("WARNING: No lossless template found, using default.");');
-  lines.push("    var templates = outputModule.templates;");
-  lines.push('    $.writeln("Available templates:");');
-  lines.push("    for (var ti = 0; ti < templates.length; ti++) {");
-  lines.push('      $.writeln("  - " + templates[ti]);');
+  lines.push('    $.writeln("WARNING: No template found. Listing available templates:");');
+  lines.push("    var availTemplates = outputModule.templates;");
+  lines.push("    for (var ti = 0; ti < availTemplates.length; ti++) {");
+  lines.push('      $.writeln("  TEMPLATE: " + availTemplates[ti]);');
+  lines.push("    }");
+  lines.push("    // Use first available template as fallback");
+  lines.push("    if (availTemplates.length > 0) {");
+  lines.push("      try {");
+  lines.push("        outputModule.applyTemplate(availTemplates[0]);");
+  lines.push('        $.writeln("Fallback template applied: " + availTemplates[0]);');
+  lines.push("        templateApplied = true;");
+  lines.push("      } catch(e) {");
+  lines.push('        $.writeln("Fallback template failed: " + e.message);');
+  lines.push("      }");
+  lines.push("    }");
+  lines.push("    if (!templateApplied) {");
+  lines.push('      throw new Error("No output module template available — cannot render");');
   lines.push("    }");
   lines.push("  }");
   lines.push("");
@@ -414,9 +426,7 @@ export function generateJsx(input: JsxGeneratorInput): string {
   // Set output file path
   lines.push("  // Set output file (outputFile declared above try block)");
   lines.push("  outputModule.file = outputFile;");
-  lines.push(
-    '  $.writeln("Output file set to: " + outputFile.fsName);'
-  );
+  lines.push('  $.writeln("Output file set to: " + outputFile.fsName);');
   lines.push("");
 
   // ── Start Render ──
