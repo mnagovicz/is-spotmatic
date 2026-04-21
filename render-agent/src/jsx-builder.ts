@@ -132,8 +132,11 @@ export function generateJsx(input: JsxGeneratorInput): string {
   lines.push("app.beginSuppressDialogs();");
   lines.push("");
 
+  // AE 2022+ can't export H.264 directly — render to lossless AVI, ffmpeg converts later
+  const outputAviPath = outputMp4Path.replace(/\.mp4$/i, "_ae_output.avi");
+
   // Declare outputFile before try block so it's accessible in cleanup
-  lines.push(`var outputFile = new File("${escapeJsString(normalizePath(outputMp4Path))}");`);
+  lines.push(`var outputFile = new File("${escapeJsString(normalizePath(outputAviPath))}");`);
   lines.push("");
 
   // Wrap everything in a try-catch for error reporting
@@ -372,39 +375,25 @@ export function generateJsx(input: JsxGeneratorInput): string {
   );
   lines.push("");
 
-  // ── Configure Output Module for MP4 (H.264) ──
-  lines.push("  // ── Step 6: Configure output module ──");
+  // ── Configure Output Module — lossless AVI (AE 2022+ dropped H.264 direct export) ──
+  lines.push("  // ── Step 6: Configure output module (lossless AVI for ffmpeg conversion) ──");
   lines.push("  var outputModule = renderItem.outputModule(1);");
   lines.push("");
-  lines.push(
-    "  // Try to apply H.264 output template, fall back to available templates"
-  );
-  lines.push("  var mp4Templates = [");
-  lines.push(
-    '    "H.264 - Match Render Settings - 15 Mbps",'
-  );
-  lines.push(
-    '    "H.264 - Match Render Settings - 10 Mbps",'
-  );
-  lines.push('    "H.264 - Match Render Settings",');
-  lines.push('    "H.264",');
-  lines.push(
-    '    "H.264 - Match Render Settings - High Quality"'
-  );
+  lines.push("  // Try lossless templates in order of preference");
+  lines.push("  var losslessTemplates = [");
+  lines.push('    "Lossless",');
+  lines.push('    "Lossless with Alpha",');
+  lines.push('    "AVI (Uncompressed)",');
+  lines.push('    "Animation",');
+  lines.push('    "PNG Sequence"');
   lines.push("  ];");
   lines.push("");
   lines.push("  var templateApplied = false;");
-  lines.push(
-    "  for (var t = 0; t < mp4Templates.length; t++) {"
-  );
+  lines.push("  for (var t = 0; t < losslessTemplates.length; t++) {");
   lines.push("    try {");
-  lines.push(
-    "      outputModule.applyTemplate(mp4Templates[t]);"
-  );
+  lines.push("      outputModule.applyTemplate(losslessTemplates[t]);");
   lines.push("      templateApplied = true;");
-  lines.push(
-    '      $.writeln("Applied output template: " + mp4Templates[t]);'
-  );
+  lines.push('      $.writeln("Applied output template: " + losslessTemplates[t]);');
   lines.push("      break;");
   lines.push("    } catch (e) {");
   lines.push("      // Template not available, try next");
@@ -412,17 +401,10 @@ export function generateJsx(input: JsxGeneratorInput): string {
   lines.push("  }");
   lines.push("");
   lines.push("  if (!templateApplied) {");
-  lines.push(
-    '    $.writeln("WARNING: No H.264 template found. Using default output module.");'
-  );
-  lines.push(
-    "    // List available templates for debugging"
-  );
+  lines.push('    $.writeln("WARNING: No lossless template found, using default.");');
   lines.push("    var templates = outputModule.templates;");
   lines.push('    $.writeln("Available templates:");');
-  lines.push(
-    "    for (var ti = 0; ti < templates.length; ti++) {"
-  );
+  lines.push("    for (var ti = 0; ti < templates.length; ti++) {");
   lines.push('      $.writeln("  - " + templates[ti]);');
   lines.push("    }");
   lines.push("  }");
