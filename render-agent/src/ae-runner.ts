@@ -11,18 +11,38 @@ export interface AeRunnerOptions {
   onProgress?: (progress: number) => void;
 }
 
+// Find any video file created in the output directory (AE may name it differently)
+function findOutputVideo(outputDir: string, excludeFile: string): string | null {
+  const videoExtensions = [".mxf", ".avi", ".mov", ".mp4", ".mkv"];
+  if (!fs.existsSync(outputDir)) return null;
+
+  const files = fs.readdirSync(outputDir);
+  for (const file of files) {
+    const filePath = path.join(outputDir, file);
+    if (filePath === excludeFile) continue;
+    const ext = path.extname(file).toLowerCase();
+    if (videoExtensions.includes(ext)) {
+      const stat = fs.statSync(filePath);
+      if (stat.size > 1000) { // must be at least 1KB
+        console.log(`[AE Runner] Found output video: ${filePath} (${stat.size} bytes)`);
+        return filePath;
+      }
+    }
+  }
+  return null;
+}
+
 export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
   const {
     aePath,
     jsxFilePath,
     outputMp4Path,
     ffmpegPath = "ffmpeg",
-    timeoutMs = 600000, // 10 min default
+    timeoutMs = 600000,
     onProgress,
   } = options;
 
-  // AE 2022+ can't export H.264 directly — agent renders to lossless AVI first
-  const outputMxfPath = outputMp4Path.replace(/\.mp4$/i, "_ae_output.mxf");
+  const outputDir = path.dirname(outputMp4Path);
 
   return new Promise((resolve, reject) => {
     console.log(`[AE Runner] Starting After Effects: ${aePath}`);
@@ -46,7 +66,6 @@ export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
     proc.stdout.on("data", (data) => {
       const text = data.toString();
       console.log(`[AE stdout] ${text.trim()}`);
-
       const progressMatch = text.match(/PROGRESS:\s*(\d+)/);
       if (progressMatch && onProgress) {
         onProgress(parseInt(progressMatch[1]));
@@ -72,8 +91,8 @@ export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
         return;
       }
 
-      // Check render_status.txt written by the JSX script
-      const statusFilePath = path.join(path.dirname(outputMp4Path), "render_status.txt");
+      // Check render_status.txt
+      const statusFilePath = path.join(outputDir, "render_status.txt");
       if (fs.existsSync(statusFilePath)) {
         const statusContent = fs.readFileSync(statusFilePath, "utf-8").trim();
         const statusLines = statusContent.split("\n");
@@ -85,54 +104,38 @@ export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
         console.log("[AE Runner] render_status.txt: SUCCESS");
       }
 
-      // Look for AVI output (lossless from AE)
-      const mxfExists = fs.existsSync(outputMxfPath);
-      const mp4Exists = fs.existsSync(outputMp4Path);
-
-      if (mxfExists) {
-        // Convert MXF → MP4 with ffmpeg
-        console.log(`[AE Runner] Converting MXF → MP4 with ffmpeg...`);
-        try {
-          execSync(
-            `"${ffmpegPath}" -y -i "${outputMxfPath}" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k "${outputMp4Path}"`,
-            { stdio: "pipe" }
-          );
-          console.log(`[AE Runner] ffmpeg conversion complete: ${outputMp4Path}`);
-          // Clean up AVI
-          try { fs.unlinkSync(outputMxfPath); } catch {}
-          resolve();
-        } catch (err) {
-          reject(new Error(`ffmpeg conversion failed: ${(err as Error).message}`));
-        }
-        return;
-      }
-
-      if (mp4Exists) {
-        // AE somehow exported MP4 directly (older version)
+      // If MP4 already exists (older AE), done
+      if (fs.existsSync(outputMp4Path)) {
         resolve();
         return;
       }
 
-      // Neither found — wait 2s and retry
+      // Find any video file AE created in output dir
+      const foundVideo = findOutputVideo(outputDir, outputMp4Path);
+
+      if (foundVideo) {
+        convertToMp4(foundVideo, outputMp4Path, ffmpegPath, resolve, reject);
+        return;
+      }
+
+      // Wait 3s and try again (AE might still be flushing)
       setTimeout(() => {
-        if (fs.existsSync(outputMxfPath)) {
-          console.log(`[AE Runner] MXF found after delay, converting...`);
-          try {
-            execSync(
-              `"${ffmpegPath}" -y -i "${outputMxfPath}" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k "${outputMp4Path}"`,
-              { stdio: "pipe" }
-            );
-            try { fs.unlinkSync(outputMxfPath); } catch {}
-            resolve();
-          } catch (err) {
-            reject(new Error(`ffmpeg conversion failed: ${(err as Error).message}`));
-          }
-        } else if (fs.existsSync(outputMp4Path)) {
+        if (fs.existsSync(outputMp4Path)) {
           resolve();
-        } else {
-          reject(new Error(`Output file not found: ${outputMp4Path} (also checked ${outputMxfPath})`));
+          return;
         }
-      }, 2000);
+        const foundVideo2 = findOutputVideo(outputDir, outputMp4Path);
+        if (foundVideo2) {
+          convertToMp4(foundVideo2, outputMp4Path, ffmpegPath, resolve, reject);
+        } else {
+          // List what IS in the output dir for debugging
+          try {
+            const files = fs.existsSync(outputDir) ? fs.readdirSync(outputDir) : [];
+            console.log(`[AE Runner] Output dir contents: ${files.join(", ") || "(empty)"}`);
+          } catch {}
+          reject(new Error(`Output file not found: ${outputMp4Path}`));
+        }
+      }, 3000);
     });
 
     proc.on("error", (err) => {
@@ -140,7 +143,6 @@ export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
       reject(new Error(`Failed to start After Effects: ${err.message}`));
     });
 
-    // Simulate progress while waiting
     if (onProgress) {
       let simulatedProgress = 10;
       const progressInterval = setInterval(() => {
@@ -152,4 +154,25 @@ export function runAfterEffects(options: AeRunnerOptions): Promise<void> {
       proc.on("close", () => clearInterval(progressInterval));
     }
   });
+}
+
+function convertToMp4(
+  inputPath: string,
+  outputMp4Path: string,
+  ffmpegPath: string,
+  resolve: () => void,
+  reject: (err: Error) => void
+): void {
+  console.log(`[AE Runner] Converting ${path.extname(inputPath).toUpperCase()} → MP4: ${inputPath}`);
+  try {
+    execSync(
+      `"${ffmpegPath}" -y -i "${inputPath}" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -c:a aac -b:a 192k "${outputMp4Path}"`,
+      { stdio: "pipe" }
+    );
+    console.log(`[AE Runner] Conversion complete: ${outputMp4Path}`);
+    try { fs.unlinkSync(inputPath); } catch {}
+    resolve();
+  } catch (err) {
+    reject(new Error(`ffmpeg conversion failed: ${(err as Error).message}`));
+  }
 }
