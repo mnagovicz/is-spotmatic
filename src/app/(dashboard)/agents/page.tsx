@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Server, Plus, Trash2, Copy, Check, Pencil, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Server, Plus, Trash2, Copy, Check, Pencil, Eye, EyeOff, RefreshCw, WifiOff } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useTranslation } from "@/lib/i18n";
@@ -412,6 +412,25 @@ export default function AgentsPage() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
+                      {agent.status !== "offline" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-orange-500"
+                          title="Dát offline"
+                          onClick={async () => {
+                            await fetch(`/api/agents/${agent.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ forceOffline: true }),
+                            });
+                            mutate();
+                            toast.success("Agent dán offline");
+                          }}
+                        >
+                          <WifiOff className="h-4 w-4" />
+                        </Button>
+                      )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-destructive">
